@@ -6,6 +6,13 @@ def read(char* filename):
     fst.fst = StdVectorFstRead(string(filename))
     return fst
 
+def read_symbols(char* filename):
+    cdef SymbolTable table = SymbolTable()
+    cdef script.ifstream* fstream = new script.ifstream(filename)
+    table.table = sym.SymbolTableRead(fstream[0], string(filename))
+    del fstream
+    return table
+
 cdef class Weight:
     cdef TropicalWeight* weight
 
@@ -142,6 +149,7 @@ cdef class BaseFst:
 
     property isyms:
         def __get__(self):
+            if self.fst.MutableInputSymbols() == NULL: return None
             cdef SymbolTable isyms = SymbolTable()
             isyms.table = self.fst.MutableInputSymbols()
             return isyms
@@ -151,6 +159,7 @@ cdef class BaseFst:
 
     property osyms:
         def __get__(self):
+            if self.fst.MutableOutputSymbols() == NULL: return None
             cdef SymbolTable osyms = SymbolTable()
             osyms.table = self.fst.MutableOutputSymbols()
             return osyms

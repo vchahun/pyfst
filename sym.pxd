@@ -1,4 +1,5 @@
 from libcpp.string cimport string
+from script cimport istream
 
 cdef extern from "<fst/symbol-table.h>" namespace "fst":    
     cdef cppclass SymbolTable:
@@ -11,3 +12,6 @@ cdef extern from "<fst/symbol-table.h>" namespace "fst":
         string Find(long key)
         string Find(char* symbol)
         unsigned NumSymbols()
+
+    cdef SymbolTable* SymbolTableRead "fst::SymbolTable::Read" (istream &strm,
+            string& source)

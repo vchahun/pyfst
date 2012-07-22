@@ -3,9 +3,12 @@ from libcpp.string cimport string
 cdef extern from "<iostream>" namespace "std":
     cdef cppclass ostream:
         pass
+    cdef cppclass istream:
+        pass
     cdef cppclass ofstream(ostream):
         ofstream(char* filename)
-        void close()
+    cdef cppclass ifstream(istream):
+        ifstream(char* filename)
 
 cimport fst
 cimport sym
