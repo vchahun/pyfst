@@ -1,6 +1,10 @@
 cimport sym
 cimport script
 
+ZERO = Weight(float('inf'))
+ONE = Weight(0)
+EPSILON = 0
+
 def read(char* filename):
     cdef BaseFst fst = BaseFst()
     fst.fst = StdVectorFstRead(string(filename))
@@ -12,6 +16,9 @@ def read_symbols(char* filename):
     table.table = sym.SymbolTableRead(fstream[0], string(filename))
     del fstream
     return table
+
+def det(BaseFst fst):
+    return BaseFst.__det__(fst)
 
 cdef class Weight:
     cdef TropicalWeight* weight
@@ -50,9 +57,6 @@ cdef class Weight:
 
     def __str__(self):
         return str(float(self))
-
-ZERO = Weight(float('inf'))
-ONE = Weight(0)
 
 cdef class Arc:
     cdef StdArc* arc
@@ -170,12 +174,12 @@ cdef class BaseFst:
     def write(self, char* filename):
         return self.fst.Write(string(filename))
 
-    def determinize(self):
-        cdef Fst ofst = Fst()
-        Determinize(self.fst[0], ofst.fst)
-        return ofst
+    def __det__(BaseFst x):
+        cdef Fst y = Fst()
+        Determinize(x.fst[0], y.fst)
+        return y
 
-    def __or__(BaseFst x, BaseFst y):
+    def __rshift__(BaseFst x, BaseFst y):
         cdef Fst ofst = Fst()
         Compose(x.fst[0], y.fst[0], ofst.fst)
         return ofst
