@@ -1,6 +1,7 @@
 from libcpp.vector cimport vector
 from libcpp.string cimport string
 from libcpp.pair cimport pair
+cimport sym
 
 cdef extern from "<fst/fstlib.h>" namespace "fst":
     cdef cppclass TropicalWeight:
@@ -41,6 +42,10 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
         void AddArc(int s, StdArc &arc)
         bint Write(string& filename)
         StdVectorFst* Copy()
+        sym.SymbolTable* MutableInputSymbols()
+        sym.SymbolTable* MutableOutputSymbols()
+        void SetInputSymbols(sym.SymbolTable* isyms)
+        void SetOutputSymbols(sym.SymbolTable* osyms)
 
     cdef StdVectorFst* StdVectorFstRead "fst::StdVectorFst::Read" (string& filename)
 

@@ -140,6 +140,24 @@ cdef class BaseFst:
     def set_final(self, int final, float weight=0):
         self.fst.SetFinal(final, TropicalWeight(weight))
 
+    property isyms:
+        def __get__(self):
+            cdef SymbolTable isyms = SymbolTable()
+            isyms.table = self.fst.MutableInputSymbols()
+            return isyms
+
+        def __set__(self, SymbolTable isyms):
+            self.fst.SetInputSymbols(isyms.table)
+
+    property osyms:
+        def __get__(self):
+            cdef SymbolTable osyms = SymbolTable()
+            osyms.table = self.fst.MutableOutputSymbols()
+            return osyms
+
+        def __set__(self, SymbolTable osyms):
+            self.fst.SetOutputSymbols(osyms.table)
+
     def write(self, char* filename):
         return self.fst.Write(string(filename))
 
