@@ -6,19 +6,17 @@ ONE = Weight(0)
 EPSILON = 0
 
 def read(char* filename):
-    cdef BaseFst fst = BaseFst()
-    fst.fst = StdVectorFstRead(string(filename))
-    return fst
+    return Fst().set_value(StdVectorFstRead(string(filename)))
 
 def read_symbols(char* filename):
-    cdef SymbolTable table = SymbolTable()
     cdef script.ifstream* fstream = new script.ifstream(filename)
-    table.table = sym.SymbolTableRead(fstream[0], string(filename))
+    cdef SymbolTable table = SymbolTable()
+    table.set_value(sym.SymbolTableRead(fstream[0], string(filename)))
     del fstream
     return table
 
-def det(BaseFst fst):
-    return BaseFst.__det__(fst)
+def det(Fst fst):
+    return Fst.__det__(fst)
 
 cdef class Weight:
     cdef TropicalWeight* weight
@@ -26,11 +24,22 @@ cdef class Weight:
     def __cinit__(self, float value=0):
         self.weight = new TropicalWeight(value)
 
+    cdef Weight set_value(self, TropicalWeight* weight):
+        self.weight.set_value(weight[0])
+        del weight
+        return self
+
     def __dealloc__(self):
         del self.weight
 
     def __float__(self):
         return self.weight.Value()
+
+    def __int__(self):
+        return int(self.weight.Value())
+
+    def __str__(self):
+        return str(float(self))
 
     def __richcmp__(Weight x, Weight y, int op):
         if op == 2: # ==
@@ -40,23 +49,16 @@ cdef class Weight:
         raise NotImplemented('comparison not implemented for Weight')
 
     def __add__(Weight x, Weight y):
-        cdef Weight result = Weight()
-        result.weight = new TropicalWeight(Plus(x.weight[0], y.weight[0]))
-        return result
+        return Weight().set_value(new TropicalWeight(Plus(x.weight[0], y.weight[0])))
 
     def __mul__(Weight x, Weight y):
-        cdef Weight result = Weight()
-        result.weight = new TropicalWeight(Times(x.weight[0], y.weight[0]))
-        return result
+        return Weight().set_value(new TropicalWeight(Times(x.weight[0], y.weight[0])))
 
     def __iadd__(self, Weight other):
-        self.weight = new TropicalWeight(Plus(self.weight[0], other.weight[0]))
+        self.set_value(new TropicalWeight(Plus(self.weight[0], other.weight[0])))
 
     def __imul__(self, Weight other):
-        self.weight = new TropicalWeight(Times(self.weight[0], other.weight[0]))
-
-    def __str__(self):
-        return str(float(self))
+        self.set_value(new TropicalWeight(Times(self.weight[0], other.weight[0])))
 
 cdef class Arc:
     cdef StdArc* arc
@@ -104,11 +106,19 @@ cdef class State:
         def __get__(self):
             return self.weight != ZERO
 
-cdef class BaseFst:
+cdef class Fst:
     cdef StdVectorFst* fst
+
+    def __cinit__(self):
+        self.fst = new StdVectorFst()
 
     def __dealloc__(self):
         del self.fst
+
+    cdef Fst set_value(self, StdVectorFst* value):
+        del self.fst
+        self.fst = value
+        return self
 
     def __len__(self):
         return self.fst.NumStates()
@@ -117,9 +127,7 @@ cdef class BaseFst:
         return '<Fst with %d states>' % len(self)
 
     def copy(self):
-        cdef BaseFst fst = BaseFst()
-        fst.fst = self.fst.Copy()
-        return fst
+        return Fst().set_value(self.fst.Copy())
 
     def __getitem__(self, int stateid):
         if not (0 <= stateid < len(self)):
@@ -174,14 +182,29 @@ cdef class BaseFst:
     def write(self, char* filename):
         return self.fst.Write(string(filename))
 
-    def __det__(BaseFst x):
-        cdef Fst y = Fst()
-        Determinize(x.fst[0], y.fst)
-        return y
+    def __det__(Fst ifst):
+        cdef Fst ofst = Fst()
+        Determinize(ifst.fst[0], ofst.fst)
+        return ofst
 
-    def __rshift__(BaseFst x, BaseFst y):
+    def __rshift__(Fst x, Fst y):
         cdef Fst ofst = Fst()
         Compose(x.fst[0], y.fst[0], ofst.fst)
+        return ofst
+
+    def shortest_distance(self, bint reverse=False):
+        cdef vector[TropicalWeight]* distances = new vector[TropicalWeight]()
+        ShortestDistance(self.fst[0], distances, reverse)
+        cdef list dist = []
+        cdef unsigned i
+        for i in range(distances.size()):
+            dist.append(Weight(distances[0][i].Value()))
+        del distances
+        return dist
+
+    def shortest_path(self, unsigned n=1):
+        cdef Fst ofst = Fst()
+        ShortestPath(self.fst[0], ofst.fst, n)
         return ofst
 
     def minimize(self):
@@ -196,6 +219,9 @@ cdef class BaseFst:
         cdef OLabelCompare* ocomp = new OLabelCompare()
         ArcSort(self.fst, ocomp[0])
         del ocomp
+
+    def top_sort(self):
+        TopSort(self.fst)
 
     def project_input(self):
         Project(self.fst, PROJECT_INPUT)
@@ -242,10 +268,6 @@ cdef class BaseFst:
         printer.Print(out, string(filename))
         del printer, out
 
-cdef class Fst(BaseFst):
-    def __cinit__(self):
-        self.fst = new StdVectorFst()
-
 cdef class SymbolTable:
     cdef sym.SymbolTable* table
 
@@ -253,6 +275,11 @@ cdef class SymbolTable:
         cdef bytes name = bytes('SymbolTable<%d>' % id(self))
         self.table = new sym.SymbolTable(string(name))
         self.table.AddSymbol(string('<eps>'))
+
+    cdef SymbolTable set_value(self, sym.SymbolTable* table):
+        del self.table
+        self.table = table
+        return self
 
     def __dealloc__(self):
         del self.table
@@ -275,3 +302,6 @@ cdef class SymbolTable:
         cdef unsigned i
         for i in range(len(self)):
             yield self.find(i)
+
+    def __str__(self):
+        return '<SymbolTable of size %d>' % len(self)

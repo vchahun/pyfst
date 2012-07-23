@@ -9,6 +9,7 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
         TropicalWeight(float value)
         float Value()
         bint operator==(TropicalWeight& other)
+        TropicalWeight& set_value "operator=" (TropicalWeight& other)
 
     cdef TropicalWeight Plus(TropicalWeight &w1, TropicalWeight& w2)
     cdef TropicalWeight Times(TropicalWeight &w1, TropicalWeight& w2)
@@ -62,12 +63,15 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
     # const
     cdef void Determinize(StdVectorFst& ifst, StdVectorFst* ofst)
     cdef void Compose(StdVectorFst &ifst1, StdVectorFst &ifst2, StdVectorFst *ofst)
+    cdef void ShortestDistance(StdVectorFst &fst, vector[TropicalWeight] *distance, bint reverse)
+    cdef void ShortestPath(StdVectorFst &ifst, StdVectorFst *ofst, unsigned n)
     # non const
     cdef void Minimize(StdVectorFst *ifst)
     cdef void ArcSort(StdVectorFst *fst, ILabelCompare& compare)
     cdef void ArcSort(StdVectorFst *fst, OLabelCompare& compare)
     cdef void Project(StdVectorFst *fst, ProjectType type)
     cdef void RmEpsilon(StdVectorFst* fst)
+    cdef void TopSort(StdVectorFst* fst)
     cdef void Relabel(StdVectorFst* fst, 
             vector[pair[int, int]]& ipairs,
             vector[pair[int, int]]& opairs)
