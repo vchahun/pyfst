@@ -6,9 +6,11 @@ ONE = Weight(0)
 EPSILON = 0
 
 def read(char* filename):
+    """read(filename): read a transducer from the binary filename"""
     return Fst().set_value(StdVectorFstRead(string(filename)))
 
 def read_symbols(char* filename):
+    """read_symbols(filename): read a symbol table"""
     cdef script.ifstream* fstream = new script.ifstream(filename)
     cdef SymbolTable table = SymbolTable()
     table.set_value(sym.SymbolTableRead(fstream[0], string(filename)))
@@ -16,9 +18,11 @@ def read_symbols(char* filename):
     return table
 
 def det(Fst fst):
+    """det(Fst fst) -> determinized transducer"""
     return Fst.__det__(fst)
 
 cdef class Weight:
+    """A weight on the tropical semiring"""
     cdef TropicalWeight* weight
 
     def __cinit__(self, float value=0):
@@ -61,6 +65,7 @@ cdef class Weight:
         self.set_value(new TropicalWeight(Times(self.weight[0], other.weight[0])))
 
 cdef class Arc:
+    """A transducer arc"""
     cdef StdArc* arc
 
     property ilabel:
@@ -80,6 +85,7 @@ cdef class Arc:
             return self.arc.nextstate
 
 cdef class State:
+    """A transducer state"""
     cdef public int stateid
     cdef StdVectorFst* fst
 
@@ -107,6 +113,7 @@ cdef class State:
             return self.weight != ZERO
 
 cdef class Fst:
+    """Fst() -> empty finite-state transducer"""
     cdef StdVectorFst* fst
 
     def __cinit__(self):
@@ -127,6 +134,7 @@ cdef class Fst:
         return '<Fst with %d states>' % len(self)
 
     def copy(self):
+        """fst.copy() -> a copy of the transducer"""
         return Fst().set_value(self.fst.Copy())
 
     def __getitem__(self, int stateid):
@@ -149,14 +157,18 @@ cdef class Fst:
             self.fst.SetStart(start)
 
     def add_arc(self, int source, int dest, int ilabel, int olabel, float weight=0):
+        """fst.add_arc(int source, int dest, int ilabel, int olabel, float weight=0):
+        add an arc source->dest with labels ilabel:olabel weighted with weight"""
         cdef StdArc* arc = new StdArc(ilabel, olabel, TropicalWeight(weight), dest)
         self.fst.AddArc(source, arc[0])
         del arc
 
     def add_state(self):
+        """fst.add_state() -> new state"""
         return self.fst.AddState()
 
     def set_final(self, int final, float weight=0):
+        """fst.set_final(int final, float weight=0): select a final state"""
         self.fst.SetFinal(final, TropicalWeight(weight))
 
     property isyms:
@@ -180,6 +192,7 @@ cdef class Fst:
             self.fst.SetOutputSymbols(osyms.table)
 
     def write(self, char* filename):
+        """fst.write(str filename): write the binary representation of the transducer in filename"""
         return self.fst.Write(string(filename))
 
     def __det__(Fst ifst):
@@ -192,7 +205,12 @@ cdef class Fst:
         Compose(x.fst[0], y.fst[0], ofst.fst)
         return ofst
 
+    def compose(self, Fst other):
+        """fst.compose(Fst other) == fst >> other -> composed fst"""
+        return (self >> other)
+
     def shortest_distance(self, bint reverse=False):
+        """fst.shortest_distance(bool reverse=False) -> length of the shortest path"""
         cdef vector[TropicalWeight]* distances = new vector[TropicalWeight]()
         ShortestDistance(self.fst[0], distances, reverse)
         cdef list dist = []
@@ -203,36 +221,45 @@ cdef class Fst:
         return dist
 
     def shortest_path(self, unsigned n=1):
+        """fst.shortest_path(int n=1) -> transducer containing the n shortest paths"""
         cdef Fst ofst = Fst()
         ShortestPath(self.fst[0], ofst.fst, n)
         return ofst
 
     def minimize(self):
+        """fst.minimize(): minimize the transducer"""
         Minimize(self.fst)
 
     def arc_sort_input(self):
+        """fst.arc_sort_input(): sort the input arcs of the transducer"""
         cdef ILabelCompare* icomp = new ILabelCompare()
         ArcSort(self.fst, icomp[0])
         del icomp
 
     def arc_sort_output(self):
+        """fst.arc_sort_output(): sort the output arcs of the transducer"""
         cdef OLabelCompare* ocomp = new OLabelCompare()
         ArcSort(self.fst, ocomp[0])
         del ocomp
 
     def top_sort(self):
+        """fst.top_sort(): topologically sort the nodes of the transducer"""
         TopSort(self.fst)
 
     def project_input(self):
+        """fst.project_input(): project the transducer on the input side"""
         Project(self.fst, PROJECT_INPUT)
 
     def project_output(self):
+        """fst.project_output(): project the transducer on the output side"""
         Project(self.fst, PROJECT_OUTPUT)
 
     def remove_epsilon(self):
+        """fst.remove_epsilon(): remove the epsilon transitions from the transducer"""
         RmEpsilon(self.fst)
 
     def relabel(self, ipairs=[], opairs=[]):
+        """fst.relabel(ipairs=[], opairs=[]): relabel the symbols on the arcs of the transducer"""
         cdef vector[pair[int, int]]* ip = new vector[pair[int, int]]()
         cdef vector[pair[int, int]]* op = new vector[pair[int, int]]()
         for old, new in ipairs:
@@ -242,39 +269,30 @@ cdef class Fst:
         Relabel(self.fst, ip[0], op[0])
         del ip, op
 
-    def draw(self, char* filename='/dev/stdout', 
-            SymbolTable isyms=None,
+    def draw(self, SymbolTable isyms=None,
             SymbolTable osyms=None,
             SymbolTable ssyms=None):
-        cdef script.ofstream* out = new script.ofstream(filename)
+        """fst.draw(SymbolTable isyms=None, SymbolTable osyms=None, SymbolTable ssyms=None)
+        -> dot format representation of the transducer"""
+        cdef script.ostringstream* out = new script.ostringstream()
         cdef script.FstDrawer* drawer = new script.FstDrawer(self.fst[0],
                 (isyms.table if isyms else NULL),
                 (osyms.table if osyms else NULL),
                 (ssyms.table if ssyms else NULL),
                 False, string(), 8.5, 11, True, False, 0.40, 0.25, 14, 5, False)
-        drawer.Draw(out, string(filename))
+        drawer.Draw(out, 'fst')
+        cdef bytes out_str = out.str().c_str()
         del drawer, out
-
-    def print_text(self, char* filename='/dev/stdout', 
-            SymbolTable isyms=None,
-            SymbolTable osyms=None,
-            SymbolTable ssyms=None):
-        cdef script.ofstream* out = new script.ofstream(filename)
-        cdef script.FstPrinter* printer = new script.FstPrinter(self.fst[0],
-                (isyms.table if isyms else NULL),
-                (osyms.table if osyms else NULL),
-                (ssyms.table if ssyms else NULL),
-                False, False)
-        printer.Print(out, string(filename))
-        del printer, out
+        return out_str
 
 cdef class SymbolTable:
+    """SymbolTable() -> empty symbol table"""
     cdef sym.SymbolTable* table
 
     def __cinit__(self):
         cdef bytes name = bytes('SymbolTable<%d>' % id(self))
         self.table = new sym.SymbolTable(string(name))
-        self.table.AddSymbol(string('<eps>'))
+        self.table.AddSymbol('<eps>')
 
     cdef SymbolTable set_value(self, sym.SymbolTable* table):
         del self.table
@@ -288,9 +306,11 @@ cdef class SymbolTable:
         return self.table.AddSymbol(string(sym))
 
     def write(self, char* filename):
+        """write(filename): save the symbol table to filename"""
         self.table.Write(string(filename))
 
     def find(self, long key):
+        """find(int key) -> decoded symbol"""
         if not 0 <= key < len(self):
             raise KeyError('symbol table index out of range')
         return self.table.Find(key).c_str()
