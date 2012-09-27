@@ -1,5 +1,6 @@
 cimport sym
 cimport script
+import subprocess
 
 ZERO = Weight(float('inf'))
 ONE = Weight(0)
@@ -381,6 +382,18 @@ cdef class Fst:
         cdef bytes out_str = out.str()
         del drawer, out
         return out_str
+
+    def _repr_svg_(self):
+        """IPython magic: show SVG reprensentation of the transducer"""
+        try:
+            process = subprocess.Popen(['dot', '-Tsvg'], 
+                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        except OSError:
+            raise Exception('cannot find the dot binary')
+        out, err = process.communicate(self.draw())
+        if err:
+            raise Exception(err)
+        return out
 
 cdef class RefSymbolTable:
     cdef sym.SymbolTable* table
