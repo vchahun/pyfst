@@ -5,33 +5,34 @@ ZERO = Weight(float('inf'))
 ONE = Weight(0)
 EPSILON = 0
 
-def read(char* filename):
-    """read(filename): read a transducer from the binary filename"""
-    return Fst().set_value(StdVectorFstRead(string(filename)))
+cdef bytes as_str(data):
+    if isinstance(data, bytes):
+        return data
+    elif isinstance(data, unicode):
+        return data.encode('utf8')
+    raise TypeError('Cannot convert %s to string' % type(data))
 
-def read_symbols(char* filename):
+def read(filename):
+    """read(filename): read a transducer from the binary filename"""
+    cdef Fst fst = Fst.__new__(Fst)
+    fst.fst = StdVectorFstRead(as_str(filename))
+    return fst
+
+def read_symbols(filename):
     """read_symbols(filename): read a symbol table"""
+    filename = as_str(filename)
     cdef script.ifstream* fstream = new script.ifstream(filename)
-    cdef SymbolTable table = SymbolTable()
-    table.set_value(sym.SymbolTableRead(fstream[0], string(filename)))
+    cdef SymbolTable table = SymbolTable.__new__(SymbolTable)
+    table.table = sym.SymbolTableRead(fstream[0], filename)
     del fstream
     return table
-
-def det(Fst fst):
-    """det(Fst fst) -> determinized transducer"""
-    return Fst.__det__(fst)
 
 cdef class Weight:
     """A weight on the tropical semiring"""
     cdef TropicalWeight* weight
 
-    def __cinit__(self, float value=0):
+    def __init__(self, float value=0):
         self.weight = new TropicalWeight(value)
-
-    cdef Weight set_value(self, TropicalWeight* weight):
-        self.weight.set_value(weight[0])
-        del weight
-        return self
 
     def __dealloc__(self):
         del self.weight
@@ -53,16 +54,22 @@ cdef class Weight:
         raise NotImplemented('comparison not implemented for Weight')
 
     def __add__(Weight x, Weight y):
-        return Weight().set_value(new TropicalWeight(Plus(x.weight[0], y.weight[0])))
+        cdef Weight result = Weight.__new__(Weight)
+        result.weight = new TropicalWeight(Plus(x.weight[0], y.weight[0]))
+        return result
 
     def __mul__(Weight x, Weight y):
-        return Weight().set_value(new TropicalWeight(Times(x.weight[0], y.weight[0])))
+        cdef Weight result = Weight.__new__(Weight)
+        result.weight = new TropicalWeight(Times(x.weight[0], y.weight[0]))
+        return result
 
     def __iadd__(self, Weight other):
-        self.set_value(new TropicalWeight(Plus(self.weight[0], other.weight[0])))
+        del self.weight
+        self.weight = new TropicalWeight(Plus(self.weight[0], other.weight[0]))
 
     def __imul__(self, Weight other):
-        self.set_value(new TropicalWeight(Times(self.weight[0], other.weight[0])))
+        del self.weight
+        self.weight = new TropicalWeight(Times(self.weight[0], other.weight[0]))
 
 cdef class Arc:
     """A transducer arc"""
@@ -78,7 +85,9 @@ cdef class Arc:
 
     property weight:
         def __get__(self):
-            return Weight(self.arc.weight.Value())
+            cdef Weight weight = Weight.__new__(Weight)
+            weight.weight = new TropicalWeight(self.arc.weight)
+            return weight
 
     property nextstate:
         def __get__(self):
@@ -106,7 +115,9 @@ cdef class State:
 
     property weight:
         def __get__(self):
-            return Weight(self.fst.Final(self.stateid).Value())
+            cdef Weight weight = Weight.__new__(Weight)
+            weight.weight = new TropicalWeight(self.fst.Final(self.stateid))
+            return weight
 
     property final:
         def __get__(self):
@@ -116,16 +127,11 @@ cdef class Fst:
     """Fst() -> empty finite-state transducer"""
     cdef StdVectorFst* fst
 
-    def __cinit__(self):
+    def __init__(self):
         self.fst = new StdVectorFst()
 
     def __dealloc__(self):
         del self.fst
-
-    cdef Fst set_value(self, StdVectorFst* value):
-        del self.fst
-        self.fst = value
-        return self
 
     def __len__(self):
         return self.fst.NumStates()
@@ -135,7 +141,9 @@ cdef class Fst:
 
     def copy(self):
         """fst.copy() -> a copy of the transducer"""
-        return Fst().set_value(self.fst.Copy())
+        cdef Fst fst = Fst.__new__(Fst)
+        fst.fst = self.fst.Copy()
+        return fst
 
     def __getitem__(self, int stateid):
         if not (0 <= stateid < len(self)):
@@ -159,6 +167,8 @@ cdef class Fst:
     def add_arc(self, int source, int dest, int ilabel, int olabel, float weight=0):
         """fst.add_arc(int source, int dest, int ilabel, int olabel, float weight=0):
         add an arc source->dest with labels ilabel:olabel weighted with weight"""
+        if source > self.fst.NumStates()-1:
+            raise ValueError('invalid source state id ({0} > {0})'.format(source, self.fst.NumStates()-1))
         cdef StdArc* arc = new StdArc(ilabel, olabel, TropicalWeight(weight), dest)
         self.fst.AddArc(source, arc[0])
         del arc
@@ -174,40 +184,118 @@ cdef class Fst:
     property isyms:
         def __get__(self):
             if self.fst.MutableInputSymbols() == NULL: return None
-            cdef SymbolTable isyms = SymbolTable()
+            cdef RefSymbolTable isyms = RefSymbolTable.__new__(RefSymbolTable)
             isyms.table = self.fst.MutableInputSymbols()
             return isyms
 
-        def __set__(self, SymbolTable isyms):
+        def __set__(self, RefSymbolTable isyms):
             self.fst.SetInputSymbols(isyms.table)
 
     property osyms:
         def __get__(self):
             if self.fst.MutableOutputSymbols() == NULL: return None
-            cdef SymbolTable osyms = SymbolTable()
+            cdef RefSymbolTable osyms = RefSymbolTable.__new__(RefSymbolTable)
             osyms.table = self.fst.MutableOutputSymbols()
             return osyms
 
-        def __set__(self, SymbolTable osyms):
+        def __set__(self, RefSymbolTable osyms):
             self.fst.SetOutputSymbols(osyms.table)
 
-    def write(self, char* filename):
-        """fst.write(str filename): write the binary representation of the transducer in filename"""
-        return self.fst.Write(string(filename))
+    def __richcmp__(Fst x, Fst y, int op):
+        if op == 2: # ==
+            return Equivalent(x.fst[0], y.fst[0])
+        elif op == 3: # !=
+            return not (x == y)
+        raise NotImplemented('comparison not implemented for Fst')
 
-    def __det__(Fst ifst):
-        cdef Fst ofst = Fst()
-        Determinize(ifst.fst[0], ofst.fst)
-        return ofst
+    def write(self, filename):
+        """fst.write(filename): write the binary representation of the transducer in filename"""
+        return self.fst.Write(as_str(filename))
 
-    def __rshift__(Fst x, Fst y):
+    def determinize(self):
+        """fst.determinize() -> determinized transducer"""
         cdef Fst ofst = Fst()
-        Compose(x.fst[0], y.fst[0], ofst.fst)
+        Determinize(self.fst[0], ofst.fst)
         return ofst
 
     def compose(self, Fst other):
-        """fst.compose(Fst other) == fst >> other -> composed fst"""
-        return (self >> other)
+        """fst.compose(Fst other) == fst >> other -> composed transducer"""
+        cdef Fst result = Fst()
+        Compose(self.fst[0], other.fst[0], result.fst)
+        return result
+
+    def __rshift__(Fst x, Fst y):
+        return x.compose(y)
+
+    def intersect(self, Fst other):
+        """fst.intersect(Fst other) == fst & other -> intersection of the two transducers"""
+        cdef Fst result = Fst()
+        Intersect(self.fst[0], other.fst[0], result.fst)
+        return result
+
+    def __and__(Fst x, Fst y):
+        return x.intersect(y)
+
+    def set_union(self, Fst other):
+        """fst.set_union(Fst other): modify to the union of the two transducers"""
+        Union(self.fst, other.fst[0])
+
+    def union(self, Fst other):
+        """fst.union(Fst other) == fst | other -> union of the two transducers"""
+        cdef Fst result = self.copy()
+        result.set_union(other)
+        return result
+
+    def __or__(Fst x, Fst y):
+        return x.union(y)
+
+    def concatenate(self, Fst other):
+        """fst.concatenate(Fst other): modify to the concatenation of the two transducers"""
+        Concat(self.fst, other.fst[0])
+
+    def concatenation(self, Fst other):
+        """fst.concatenation(Fst other) == fst + other -> concatenation of the two transducers"""
+        cdef Fst result = self.copy()
+        result.concatenate(other)
+        return result
+
+    def __add__(Fst x, Fst y):
+        return x.concatenation(y)
+
+    def difference(self, Fst other):
+        """fst.difference(Fst other) == fst - other -> difference of the two transducers"""
+        cdef Fst result = Fst()
+        Difference(self.fst[0], other.fst[0], result.fst)
+        return result
+
+    def __sub__(Fst x, Fst y):
+        return x.difference(y)
+
+    def set_closure(self):
+        """fst.set_closure(): modify to the Kleene closure of the transducer"""
+        Closure(self.fst, CLOSURE_STAR)
+
+    def closure(self):
+        """fst.closure() -> Kleene closure of the transducer"""
+        cdef Fst result = self.copy()
+        result.set_closure()
+        return result
+
+    def invert(self):
+        """fst.invert(): modify to the inverse of the transducer"""
+        Invert(self.fst)
+    
+    def inverse(self):
+        """fst.inverse() -> inverse of the transducer"""
+        cdef Fst result = self.copy()
+        result.invert()
+        return result
+
+    def reverse(self):
+        """fst.reverse() -> reversed transducer"""
+        cdef Fst result = Fst()
+        Reverse(self.fst[0], result.fst)
+        return result
 
     def shortest_distance(self, bint reverse=False):
         """fst.shortest_distance(bool reverse=False) -> length of the shortest path"""
@@ -269,45 +357,40 @@ cdef class Fst:
         Relabel(self.fst, ip[0], op[0])
         del ip, op
 
-    def draw(self, SymbolTable isyms=None,
-            SymbolTable osyms=None,
-            SymbolTable ssyms=None):
+    def prune(self, float theshold):
+        """fst.prune(float theshold): prune the transducer"""
+        Prune(self.fst, TropicalWeight(theshold))
+
+    def draw(self, RefSymbolTable isyms=None,
+            RefSymbolTable osyms=None,
+            RefSymbolTable ssyms=None):
         """fst.draw(SymbolTable isyms=None, SymbolTable osyms=None, SymbolTable ssyms=None)
         -> dot format representation of the transducer"""
         cdef script.ostringstream* out = new script.ostringstream()
+        cdef sym.SymbolTable* isyms_table = self.fst.MutableInputSymbols()
+        if isyms is not None:
+            isyms_table = isyms.table
+        cdef sym.SymbolTable* osyms_table = self.fst.MutableOutputSymbols()
+        if osyms is not None:
+            osyms_table = osyms.table
+        cdef sym.SymbolTable* ssyms_table = NULL
         cdef script.FstDrawer* drawer = new script.FstDrawer(self.fst[0],
-                (isyms.table if isyms else NULL),
-                (osyms.table if osyms else NULL),
-                (ssyms.table if ssyms else NULL),
+                isyms_table, osyms_table, ssyms_table,
                 False, string(), 8.5, 11, True, False, 0.40, 0.25, 14, 5, False)
         drawer.Draw(out, 'fst')
-        cdef bytes out_str = out.str().c_str()
+        cdef bytes out_str = out.str()
         del drawer, out
         return out_str
 
-cdef class SymbolTable:
-    """SymbolTable() -> empty symbol table"""
+cdef class RefSymbolTable:
     cdef sym.SymbolTable* table
 
-    def __cinit__(self):
-        cdef bytes name = bytes('SymbolTable<%d>' % id(self))
-        self.table = new sym.SymbolTable(string(name))
-        self.table.AddSymbol('<eps>')
+    def __getitem__(self, sym):
+        return self.table.AddSymbol(as_str(sym))
 
-    cdef SymbolTable set_value(self, sym.SymbolTable* table):
-        del self.table
-        self.table = table
-        return self
-
-    def __dealloc__(self):
-        del self.table
-
-    def __getitem__(self, char* sym):
-        return self.table.AddSymbol(string(sym))
-
-    def write(self, char* filename):
+    def write(self, filename):
         """write(filename): save the symbol table to filename"""
-        self.table.Write(string(filename))
+        self.table.Write(as_str(filename))
 
     def find(self, long key):
         """find(int key) -> decoded symbol"""
@@ -325,3 +408,13 @@ cdef class SymbolTable:
 
     def __str__(self):
         return '<SymbolTable of size %d>' % len(self)
+
+cdef class SymbolTable(RefSymbolTable):
+    """SymbolTable() -> empty symbol table"""
+    def __init__(self):
+        cdef bytes name = bytes('SymbolTable<%d>' % id(self))
+        self.table = new sym.SymbolTable(name)
+        self.table.AddSymbol('<eps>')
+
+    def __dealloc__(self):
+        del self.table

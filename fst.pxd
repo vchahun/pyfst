@@ -60,11 +60,20 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
         PROJECT_INPUT
         PROJECT_OUTPUT
 
+    enum ClosureType:
+        CLOSURE_STAR
+        CLOSURE_PLUS
+
+    cdef bint Equivalent(StdVectorFst& fst1, StdVectorFst& fst2)
+
     # const
     cdef void Determinize(StdVectorFst& ifst, StdVectorFst* ofst)
     cdef void Compose(StdVectorFst &ifst1, StdVectorFst &ifst2, StdVectorFst *ofst)
     cdef void ShortestDistance(StdVectorFst &fst, vector[TropicalWeight] *distance, bint reverse)
     cdef void ShortestPath(StdVectorFst &ifst, StdVectorFst *ofst, unsigned n)
+    cdef void Intersect(StdVectorFst &ifst1, StdVectorFst &ifst2, StdVectorFst *ofst)
+    cdef void Difference(StdVectorFst &ifst1, StdVectorFst &ifst2, StdVectorFst *ofst)
+    cdef void Reverse(StdVectorFst &ifst, StdVectorFst* ofst)
     # non const
     cdef void Minimize(StdVectorFst *ifst)
     cdef void ArcSort(StdVectorFst *fst, ILabelCompare& compare)
@@ -75,3 +84,8 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
     cdef void Relabel(StdVectorFst* fst, 
             vector[pair[int, int]]& ipairs,
             vector[pair[int, int]]& opairs)
+    cdef void Union(StdVectorFst *ifst1, StdVectorFst &ifst2)
+    cdef void Concat(StdVectorFst *ifst1, StdVectorFst &ifst2)
+    cdef void Closure(StdVectorFst* ifst, ClosureType type)
+    cdef void Invert(StdVectorFst* ifst)
+    cdef void Prune(StdVectorFst* ifst, TropicalWeight threshold)
