@@ -8,10 +8,14 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
     cdef cppclass Weight:
         pass
 
-    cdef cppclass Arc:
+    cdef cppclass Arc[W]:
         int ilabel
         int olabel
         int nextstate
+        Arc(int ilabel, int olabel, W& weight, int nextstate)
+        W weight
+
+    ctypedef Arc[TropicalWeight] StdArc
 
     cdef cppclass ArcIterator[T]:
         ArcIterator(T& fst, int state)
@@ -37,7 +41,6 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
         void SetOutputSymbols(sym.SymbolTable* osyms)
         sym.SymbolTable* MutableInputSymbols()
         sym.SymbolTable* MutableOutputSymbols()
-        void AddArc(int s, Arc &arc)
 
     cdef cppclass TropicalWeight(Weight):
         float Value()
@@ -52,12 +55,8 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
     cdef TropicalWeight TropicalZero "fst::TropicalWeight::Zero" ()
     cdef TropicalWeight TropicalOne "fst::TropicalWeight::One" ()
 
-    cdef cppclass StdArc(Arc):
-        StdArc(int ilabel, int olabel, Weight& weight, int nextstate)
-        TropicalWeight weight
-
     cdef cppclass StdVectorFst(MutableFst):
-        pass
+        void AddArc(int s, StdArc &arc)
 
     cdef StdVectorFst* StdVectorFstRead "fst::StdVectorFst::Read" (string& filename)
 

@@ -50,7 +50,7 @@ cdef class TropicalWeight:
         return int(self.weight.Value())
 
     def __str__(self):
-        return str(float(self))
+        return 'TropicalWeight({0})'.format(float(self))
 
     def __richcmp__(TropicalWeight x, TropicalWeight y, int op):
         if op == 2: # ==
@@ -77,7 +77,7 @@ cdef class TropicalWeight:
         del self.weight
         self.weight = new cfst.TropicalWeight(cfst.Times(self.weight[0], other.weight[0]))
 
-cdef class Arc:
+cdef class StdArc:
     """A transducer arc"""
     cdef cfst.StdArc* arc
 
@@ -92,17 +92,17 @@ cdef class Arc:
         def __get__(self):
             return self.arc.olabel
 
+    property nextstate:
+        def __get__(self):
+            return self.arc.nextstate
+
     property weight:
         def __get__(self):
             cdef TropicalWeight weight = TropicalWeight.__new__(TropicalWeight)
             weight.weight = new cfst.TropicalWeight(self.arc.weight)
             return weight
 
-    property nextstate:
-        def __get__(self):
-            return self.arc.nextstate
-
-cdef class State:
+cdef class StdState:
     """A transducer state"""
     cdef public int stateid
     cdef cfst.StdVectorFst* fst
@@ -116,10 +116,10 @@ cdef class State:
     def __iter__(self):
         cdef cfst.ArcIterator[cfst.StdVectorFst]* it
         it = new cfst.ArcIterator[cfst.StdVectorFst](self.fst[0], self.stateid)
-        cdef Arc arc
+        cdef StdArc arc
         try:
             while not it.Done():
-                arc = Arc()
+                arc = StdArc()
                 arc.arc = <cfst.StdArc*> &it.Value()
                 yield arc
                 it.Next()
@@ -163,7 +163,7 @@ cdef class Fst:
     def __getitem__(self, int stateid):
         if not (0 <= stateid < len(self)):
             raise KeyError('state index out of range')
-        cdef State state = State()
+        cdef StdState state = StdState()
         state.stateid = stateid
         state.fst = self.fst
         return state
