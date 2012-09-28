@@ -1,6 +1,12 @@
+cimport cfst
 cimport sym
 cimport script
 import subprocess
+
+from libcpp.vector cimport vector
+from libcpp.string cimport string
+from libcpp.pair cimport pair
+from util cimport ifstream, ostringstream
 
 ZERO = Weight(float('inf'))
 ONE = Weight(0)
@@ -16,13 +22,13 @@ cdef bytes as_str(data):
 def read(filename):
     """read(filename): read a transducer from the binary filename"""
     cdef Fst fst = Fst.__new__(Fst)
-    fst.fst = StdVectorFstRead(as_str(filename))
+    fst.fst = cfst.StdVectorFstRead(as_str(filename))
     return fst
 
 def read_symbols(filename):
     """read_symbols(filename): read a symbol table"""
     filename = as_str(filename)
-    cdef script.ifstream* fstream = new script.ifstream(filename)
+    cdef ifstream* fstream = new ifstream(filename)
     cdef SymbolTable table = SymbolTable.__new__(SymbolTable)
     table.table = sym.SymbolTableRead(fstream[0], filename)
     del fstream
@@ -30,10 +36,10 @@ def read_symbols(filename):
 
 cdef class Weight:
     """A weight on the tropical semiring"""
-    cdef TropicalWeight* weight
+    cdef cfst.TropicalWeight* weight
 
     def __init__(self, float value=0):
-        self.weight = new TropicalWeight(value)
+        self.weight = new cfst.TropicalWeight(value)
 
     def __dealloc__(self):
         del self.weight
@@ -56,25 +62,25 @@ cdef class Weight:
 
     def __add__(Weight x, Weight y):
         cdef Weight result = Weight.__new__(Weight)
-        result.weight = new TropicalWeight(Plus(x.weight[0], y.weight[0]))
+        result.weight = new cfst.TropicalWeight(cfst.Plus(x.weight[0], y.weight[0]))
         return result
 
     def __mul__(Weight x, Weight y):
         cdef Weight result = Weight.__new__(Weight)
-        result.weight = new TropicalWeight(Times(x.weight[0], y.weight[0]))
+        result.weight = new cfst.TropicalWeight(cfst.Times(x.weight[0], y.weight[0]))
         return result
 
     def __iadd__(self, Weight other):
         del self.weight
-        self.weight = new TropicalWeight(Plus(self.weight[0], other.weight[0]))
+        self.weight = new cfst.TropicalWeight(cfst.Plus(self.weight[0], other.weight[0]))
 
     def __imul__(self, Weight other):
         del self.weight
-        self.weight = new TropicalWeight(Times(self.weight[0], other.weight[0]))
+        self.weight = new cfst.TropicalWeight(cfst.Times(self.weight[0], other.weight[0]))
 
 cdef class Arc:
     """A transducer arc"""
-    cdef StdArc* arc
+    cdef cfst.StdArc* arc
 
     property ilabel:
         def __get__(self):
@@ -87,7 +93,7 @@ cdef class Arc:
     property weight:
         def __get__(self):
             cdef Weight weight = Weight.__new__(Weight)
-            weight.weight = new TropicalWeight(self.arc.weight)
+            weight.weight = new cfst.TropicalWeight(self.arc.weight)
             return weight
 
     property nextstate:
@@ -97,13 +103,13 @@ cdef class Arc:
 cdef class State:
     """A transducer state"""
     cdef public int stateid
-    cdef StdVectorFst* fst
+    cdef cfst.StdVectorFst* fst
 
     def __len__(self):
         return self.fst.NumArcs(self.stateid)
 
     def __iter__(self):
-        cdef ArcIterator* it = new ArcIterator(self.fst[0], self.stateid)
+        cdef cfst.ArcIterator* it = new cfst.ArcIterator(self.fst[0], self.stateid)
         cdef Arc arc
         try:
             while not it.Done():
@@ -117,7 +123,7 @@ cdef class State:
     property weight:
         def __get__(self):
             cdef Weight weight = Weight.__new__(Weight)
-            weight.weight = new TropicalWeight(self.fst.Final(self.stateid))
+            weight.weight = new cfst.TropicalWeight(self.fst.Final(self.stateid))
             return weight
 
     property final:
@@ -126,10 +132,10 @@ cdef class State:
 
 cdef class Fst:
     """Fst() -> empty finite-state transducer"""
-    cdef StdVectorFst* fst
+    cdef cfst.StdVectorFst* fst
 
     def __init__(self):
-        self.fst = new StdVectorFst()
+        self.fst = new cfst.StdVectorFst()
 
     def __dealloc__(self):
         del self.fst
@@ -170,7 +176,7 @@ cdef class Fst:
         add an arc source->dest with labels ilabel:olabel weighted with weight"""
         if source > self.fst.NumStates()-1:
             raise ValueError('invalid source state id ({0} > {0})'.format(source, self.fst.NumStates()-1))
-        cdef StdArc* arc = new StdArc(ilabel, olabel, TropicalWeight(weight), dest)
+        cdef cfst.StdArc* arc = new cfst.StdArc(ilabel, olabel, cfst.TropicalWeight(weight), dest)
         self.fst.AddArc(source, arc[0])
         del arc
 
@@ -180,7 +186,7 @@ cdef class Fst:
 
     def set_final(self, int final, float weight=0):
         """fst.set_final(int final, float weight=0): select a final state"""
-        self.fst.SetFinal(final, TropicalWeight(weight))
+        self.fst.SetFinal(final, cfst.TropicalWeight(weight))
 
     property isyms:
         def __get__(self):
@@ -204,7 +210,7 @@ cdef class Fst:
 
     def __richcmp__(Fst x, Fst y, int op):
         if op == 2: # ==
-            return Equivalent(x.fst[0], y.fst[0])
+            return cfst.Equivalent(x.fst[0], y.fst[0])
         elif op == 3: # !=
             return not (x == y)
         raise NotImplemented('comparison not implemented for Fst')
@@ -215,14 +221,14 @@ cdef class Fst:
 
     def determinize(self):
         """fst.determinize() -> determinized transducer"""
-        cdef Fst ofst = Fst()
-        Determinize(self.fst[0], ofst.fst)
-        return ofst
+        cdef Fst result = Fst()
+        cfst.Determinize(self.fst[0], result.fst)
+        return result
 
     def compose(self, Fst other):
         """fst.compose(Fst other) == fst >> other -> composed transducer"""
         cdef Fst result = Fst()
-        Compose(self.fst[0], other.fst[0], result.fst)
+        cfst.Compose(self.fst[0], other.fst[0], result.fst)
         return result
 
     def __rshift__(Fst x, Fst y):
@@ -231,7 +237,7 @@ cdef class Fst:
     def intersect(self, Fst other):
         """fst.intersect(Fst other) == fst & other -> intersection of the two transducers"""
         cdef Fst result = Fst()
-        Intersect(self.fst[0], other.fst[0], result.fst)
+        cfst.Intersect(self.fst[0], other.fst[0], result.fst)
         return result
 
     def __and__(Fst x, Fst y):
@@ -239,7 +245,7 @@ cdef class Fst:
 
     def set_union(self, Fst other):
         """fst.set_union(Fst other): modify to the union of the two transducers"""
-        Union(self.fst, other.fst[0])
+        cfst.Union(self.fst, other.fst[0])
 
     def union(self, Fst other):
         """fst.union(Fst other) == fst | other -> union of the two transducers"""
@@ -252,7 +258,7 @@ cdef class Fst:
 
     def concatenate(self, Fst other):
         """fst.concatenate(Fst other): modify to the concatenation of the two transducers"""
-        Concat(self.fst, other.fst[0])
+        cfst.Concat(self.fst, other.fst[0])
 
     def concatenation(self, Fst other):
         """fst.concatenation(Fst other) == fst + other -> concatenation of the two transducers"""
@@ -266,7 +272,7 @@ cdef class Fst:
     def difference(self, Fst other):
         """fst.difference(Fst other) == fst - other -> difference of the two transducers"""
         cdef Fst result = Fst()
-        Difference(self.fst[0], other.fst[0], result.fst)
+        cfst.Difference(self.fst[0], other.fst[0], result.fst)
         return result
 
     def __sub__(Fst x, Fst y):
@@ -274,7 +280,7 @@ cdef class Fst:
 
     def set_closure(self):
         """fst.set_closure(): modify to the Kleene closure of the transducer"""
-        Closure(self.fst, CLOSURE_STAR)
+        cfst.Closure(self.fst, cfst.CLOSURE_STAR)
 
     def closure(self):
         """fst.closure() -> Kleene closure of the transducer"""
@@ -284,7 +290,7 @@ cdef class Fst:
 
     def invert(self):
         """fst.invert(): modify to the inverse of the transducer"""
-        Invert(self.fst)
+        cfst.Invert(self.fst)
     
     def inverse(self):
         """fst.inverse() -> inverse of the transducer"""
@@ -295,13 +301,13 @@ cdef class Fst:
     def reverse(self):
         """fst.reverse() -> reversed transducer"""
         cdef Fst result = Fst()
-        Reverse(self.fst[0], result.fst)
+        cfst.Reverse(self.fst[0], result.fst)
         return result
 
     def shortest_distance(self, bint reverse=False):
         """fst.shortest_distance(bool reverse=False) -> length of the shortest path"""
-        cdef vector[TropicalWeight]* distances = new vector[TropicalWeight]()
-        ShortestDistance(self.fst[0], distances, reverse)
+        cdef vector[cfst.TropicalWeight]* distances = new vector[cfst.TropicalWeight]()
+        cfst.ShortestDistance(self.fst[0], distances, reverse)
         cdef list dist = []
         cdef unsigned i
         for i in range(distances.size()):
@@ -312,40 +318,40 @@ cdef class Fst:
     def shortest_path(self, unsigned n=1):
         """fst.shortest_path(int n=1) -> transducer containing the n shortest paths"""
         cdef Fst ofst = Fst()
-        ShortestPath(self.fst[0], ofst.fst, n)
+        cfst.ShortestPath(self.fst[0], ofst.fst, n)
         return ofst
 
     def minimize(self):
         """fst.minimize(): minimize the transducer"""
-        Minimize(self.fst)
+        cfst.Minimize(self.fst)
 
     def arc_sort_input(self):
         """fst.arc_sort_input(): sort the input arcs of the transducer"""
-        cdef ILabelCompare* icomp = new ILabelCompare()
-        ArcSort(self.fst, icomp[0])
+        cdef cfst.ILabelCompare* icomp = new cfst.ILabelCompare()
+        cfst.ArcSort(self.fst, icomp[0])
         del icomp
 
     def arc_sort_output(self):
         """fst.arc_sort_output(): sort the output arcs of the transducer"""
-        cdef OLabelCompare* ocomp = new OLabelCompare()
-        ArcSort(self.fst, ocomp[0])
+        cdef cfst.OLabelCompare* ocomp = new cfst.OLabelCompare()
+        cfst.ArcSort(self.fst, ocomp[0])
         del ocomp
 
     def top_sort(self):
         """fst.top_sort(): topologically sort the nodes of the transducer"""
-        TopSort(self.fst)
+        cfst.TopSort(self.fst)
 
     def project_input(self):
         """fst.project_input(): project the transducer on the input side"""
-        Project(self.fst, PROJECT_INPUT)
+        cfst.Project(self.fst, cfst.PROJECT_INPUT)
 
     def project_output(self):
         """fst.project_output(): project the transducer on the output side"""
-        Project(self.fst, PROJECT_OUTPUT)
+        cfst.Project(self.fst, cfst.PROJECT_OUTPUT)
 
     def remove_epsilon(self):
         """fst.remove_epsilon(): remove the epsilon transitions from the transducer"""
-        RmEpsilon(self.fst)
+        cfst.RmEpsilon(self.fst)
 
     def relabel(self, ipairs=[], opairs=[]):
         """fst.relabel(ipairs=[], opairs=[]): relabel the symbols on the arcs of the transducer"""
@@ -355,19 +361,19 @@ cdef class Fst:
             ip.push_back(pair[int, int](old, new))
         for old, new in opairs:
             op.push_back(pair[int, int](old, new))
-        Relabel(self.fst, ip[0], op[0])
+        cfst.Relabel(self.fst, ip[0], op[0])
         del ip, op
 
     def prune(self, float theshold):
         """fst.prune(float theshold): prune the transducer"""
-        Prune(self.fst, TropicalWeight(theshold))
+        cfst.Prune(self.fst, cfst.TropicalWeight(theshold))
 
     def draw(self, RefSymbolTable isyms=None,
             RefSymbolTable osyms=None,
             RefSymbolTable ssyms=None):
         """fst.draw(SymbolTable isyms=None, SymbolTable osyms=None, SymbolTable ssyms=None)
         -> dot format representation of the transducer"""
-        cdef script.ostringstream* out = new script.ostringstream()
+        cdef ostringstream* out = new ostringstream()
         cdef sym.SymbolTable* isyms_table = self.fst.MutableInputSymbols()
         if isyms is not None:
             isyms_table = isyms.table

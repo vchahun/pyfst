@@ -1,5 +1,5 @@
 from libcpp.string cimport string
-from script cimport istream
+from util cimport istream
 
 cdef extern from "<fst/symbol-table.h>" namespace "fst":    
     cdef cppclass SymbolTable:

@@ -1,23 +1,12 @@
 from libcpp.string cimport string
+from util cimport ostream
 
-cdef extern from "<iostream>" namespace "std":
-    ctypedef string const_string "const string"
-    cdef cppclass ostream:
-        pass
-    cdef cppclass istream:
-        pass
-    cdef cppclass ostringstream(ostream):
-        ostringstream()
-        string str()
-    cdef cppclass ifstream(istream):
-        ifstream(char* filename)
-
-cimport fst
+cimport cfst
 cimport sym
 
 cdef extern from "<fst/script/draw-impl.h>":
     cdef cppclass FstDrawer "fst::FstDrawer<fst::StdArc>":
-        FstDrawer(fst.StdVectorFst& fst, 
+        FstDrawer(cfst.StdVectorFst& fst, 
                   sym.SymbolTable *isyms,
                   sym.SymbolTable *osyms,
                   sym.SymbolTable *ssyms,
