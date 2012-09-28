@@ -8,10 +8,6 @@ from libcpp.string cimport string
 from libcpp.pair cimport pair
 from util cimport ifstream, ostringstream
 
-ZERO = Weight(float('inf'))
-ONE = Weight(0)
-EPSILON = 0
-
 cdef bytes as_str(data):
     if isinstance(data, bytes):
         return data
@@ -34,9 +30,12 @@ def read_symbols(filename):
     del fstream
     return table
 
-cdef class Weight:
+cdef class TropicalWeight:
     """A weight on the tropical semiring"""
     cdef cfst.TropicalWeight* weight
+
+    ZERO = TropicalWeight(float('inf'))
+    ONE = TropicalWeight(0)
 
     def __init__(self, float value=0):
         self.weight = new cfst.TropicalWeight(value)
@@ -53,34 +52,37 @@ cdef class Weight:
     def __str__(self):
         return str(float(self))
 
-    def __richcmp__(Weight x, Weight y, int op):
+    def __richcmp__(TropicalWeight x, TropicalWeight y, int op):
         if op == 2: # ==
             return x.weight[0] == y.weight[0]
         elif op == 3: # !=
             return not (x == y)
-        raise NotImplemented('comparison not implemented for Weight')
+        raise NotImplemented('comparison not implemented for TropicalWeight')
 
-    def __add__(Weight x, Weight y):
-        cdef Weight result = Weight.__new__(Weight)
+    def __add__(TropicalWeight x, TropicalWeight y):
+        cdef TropicalWeight result = TropicalWeight.__new__(TropicalWeight)
         result.weight = new cfst.TropicalWeight(cfst.Plus(x.weight[0], y.weight[0]))
         return result
 
-    def __mul__(Weight x, Weight y):
-        cdef Weight result = Weight.__new__(Weight)
+    def __mul__(TropicalWeight x, TropicalWeight y):
+        cdef TropicalWeight result = TropicalWeight.__new__(TropicalWeight)
         result.weight = new cfst.TropicalWeight(cfst.Times(x.weight[0], y.weight[0]))
         return result
 
-    def __iadd__(self, Weight other):
+    def __iadd__(self, TropicalWeight other):
         del self.weight
         self.weight = new cfst.TropicalWeight(cfst.Plus(self.weight[0], other.weight[0]))
 
-    def __imul__(self, Weight other):
+    def __imul__(self, TropicalWeight other):
         del self.weight
         self.weight = new cfst.TropicalWeight(cfst.Times(self.weight[0], other.weight[0]))
 
 cdef class Arc:
     """A transducer arc"""
     cdef cfst.StdArc* arc
+
+    def __init__(self):
+        raise NotImplemented('cannot create independent arc')
 
     property ilabel:
         def __get__(self):
@@ -92,7 +94,7 @@ cdef class Arc:
 
     property weight:
         def __get__(self):
-            cdef Weight weight = Weight.__new__(Weight)
+            cdef TropicalWeight weight = TropicalWeight.__new__(TropicalWeight)
             weight.weight = new cfst.TropicalWeight(self.arc.weight)
             return weight
 
@@ -105,16 +107,20 @@ cdef class State:
     cdef public int stateid
     cdef cfst.StdVectorFst* fst
 
+    def __init__(self):
+        raise NotImplemented('cannot create independent state')
+
     def __len__(self):
         return self.fst.NumArcs(self.stateid)
 
     def __iter__(self):
-        cdef cfst.ArcIterator* it = new cfst.ArcIterator(self.fst[0], self.stateid)
+        cdef cfst.ArcIterator[cfst.StdVectorFst]* it
+        it = new cfst.ArcIterator[cfst.StdVectorFst](self.fst[0], self.stateid)
         cdef Arc arc
         try:
             while not it.Done():
                 arc = Arc()
-                arc.arc = &it.Value()
+                arc.arc = <cfst.StdArc*> &it.Value()
                 yield arc
                 it.Next()
         finally:
@@ -122,17 +128,19 @@ cdef class State:
 
     property weight:
         def __get__(self):
-            cdef Weight weight = Weight.__new__(Weight)
+            cdef TropicalWeight weight = TropicalWeight.__new__(TropicalWeight)
             weight.weight = new cfst.TropicalWeight(self.fst.Final(self.stateid))
             return weight
 
     property final:
         def __get__(self):
-            return self.weight != ZERO
+            return not (self.fst.Final(self.stateid) == cfst.TropicalZero())
 
 cdef class Fst:
     """Fst() -> empty finite-state transducer"""
     cdef cfst.StdVectorFst* fst
+    cdef SymbolTable _isyms
+    cdef SymbolTable _osyms
 
     def __init__(self):
         self.fst = new cfst.StdVectorFst()
@@ -144,12 +152,12 @@ cdef class Fst:
         return self.fst.NumStates()
 
     def __str__(self):
-        return '<Fst with %d states>' % len(self)
+        return '<StdVectorFst with %d states>' % len(self)
 
     def copy(self):
         """fst.copy() -> a copy of the transducer"""
         cdef Fst fst = Fst.__new__(Fst)
-        fst.fst = self.fst.Copy()
+        fst.fst = <cfst.StdVectorFst*> self.fst.Copy()
         return fst
 
     def __getitem__(self, int stateid):
@@ -190,22 +198,26 @@ cdef class Fst:
 
     property isyms:
         def __get__(self):
-            if self.fst.MutableInputSymbols() == NULL: return None
-            cdef RefSymbolTable isyms = RefSymbolTable.__new__(RefSymbolTable)
-            isyms.table = self.fst.MutableInputSymbols()
-            return isyms
+            if self._isyms is None:
+                if self.fst.MutableInputSymbols() == NULL: return None
+                self._isyms = SymbolTable.__new__(SymbolTable)
+                self._isyms.table = self.fst.MutableInputSymbols()
+            return self._isyms
 
-        def __set__(self, RefSymbolTable isyms):
+        def __set__(self, SymbolTable isyms):
+            self._isyms = isyms
             self.fst.SetInputSymbols(isyms.table)
 
     property osyms:
         def __get__(self):
-            if self.fst.MutableOutputSymbols() == NULL: return None
-            cdef RefSymbolTable osyms = RefSymbolTable.__new__(RefSymbolTable)
-            osyms.table = self.fst.MutableOutputSymbols()
-            return osyms
+            if self._osyms is None:
+                if self.fst.MutableOutputSymbols() == NULL: return None
+                self._osyms = SymbolTable.__new__(SymbolTable)
+                self._osyms.table = self.fst.MutableOutputSymbols()
+            return self._osyms
 
-        def __set__(self, RefSymbolTable osyms):
+        def __set__(self, SymbolTable osyms):
+            self._osyms = osyms
             self.fst.SetOutputSymbols(osyms.table)
 
     def __richcmp__(Fst x, Fst y, int op):
@@ -311,7 +323,7 @@ cdef class Fst:
         cdef list dist = []
         cdef unsigned i
         for i in range(distances.size()):
-            dist.append(Weight(distances[0][i].Value()))
+            dist.append(TropicalWeight(distances[0][i].Value()))
         del distances
         return dist
 
@@ -327,13 +339,13 @@ cdef class Fst:
 
     def arc_sort_input(self):
         """fst.arc_sort_input(): sort the input arcs of the transducer"""
-        cdef cfst.ILabelCompare* icomp = new cfst.ILabelCompare()
+        cdef cfst.ILabelCompare[cfst.StdArc]* icomp = new cfst.ILabelCompare[cfst.StdArc]()
         cfst.ArcSort(self.fst, icomp[0])
         del icomp
 
     def arc_sort_output(self):
         """fst.arc_sort_output(): sort the output arcs of the transducer"""
-        cdef cfst.OLabelCompare* ocomp = new cfst.OLabelCompare()
+        cdef cfst.OLabelCompare[cfst.StdArc]* ocomp = new cfst.OLabelCompare[cfst.StdArc]()
         cfst.ArcSort(self.fst, ocomp[0])
         del ocomp
 
@@ -368,9 +380,9 @@ cdef class Fst:
         """fst.prune(float theshold): prune the transducer"""
         cfst.Prune(self.fst, cfst.TropicalWeight(theshold))
 
-    def draw(self, RefSymbolTable isyms=None,
-            RefSymbolTable osyms=None,
-            RefSymbolTable ssyms=None):
+    def draw(self, SymbolTable isyms=None,
+            SymbolTable osyms=None,
+            SymbolTable ssyms=None):
         """fst.draw(SymbolTable isyms=None, SymbolTable osyms=None, SymbolTable ssyms=None)
         -> dot format representation of the transducer"""
         cdef ostringstream* out = new ostringstream()
@@ -401,8 +413,23 @@ cdef class Fst:
             raise Exception(err)
         return out
 
-cdef class RefSymbolTable:
+cdef class SymbolTable:
+    """SymbolTable() -> empty symbol table"""
     cdef sym.SymbolTable* table
+    cdef bint foreign
+
+    def __cinit__(self):
+        self.foreign = True
+
+    def __init__(self):
+        cdef bytes name = bytes('SymbolTable<%d>' % id(self))
+        self.table = new sym.SymbolTable(name)
+        self.table.AddSymbol('<eps>')
+        self.foreign = False
+
+    def __dealloc__(self):
+        if not self.foreign:
+            del self.table
 
     def __getitem__(self, sym):
         return self.table.AddSymbol(as_str(sym))
@@ -427,13 +454,3 @@ cdef class RefSymbolTable:
 
     def __str__(self):
         return '<SymbolTable of size %d>' % len(self)
-
-cdef class SymbolTable(RefSymbolTable):
-    """SymbolTable() -> empty symbol table"""
-    def __init__(self):
-        cdef bytes name = bytes('SymbolTable<%d>' % id(self))
-        self.table = new sym.SymbolTable(name)
-        self.table.AddSymbol('<eps>')
-
-    def __dealloc__(self):
-        del self.table

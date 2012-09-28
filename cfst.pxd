@@ -4,10 +4,45 @@ from libcpp.pair cimport pair
 cimport sym
 
 cdef extern from "<fst/fstlib.h>" namespace "fst":
-    cdef cppclass TropicalWeight:
-        TropicalWeight(TropicalWeight)
-        TropicalWeight(float value)
+
+    cdef cppclass Weight:
+        pass
+
+    cdef cppclass Arc:
+        int ilabel
+        int olabel
+        int nextstate
+
+    cdef cppclass ArcIterator[T]:
+        ArcIterator(T& fst, int state)
+        bint Done()
+        void Next()
+        Arc& Value()
+
+    cdef cppclass Fst:
+        int Start()
+        TropicalWeight Final(int s)
+        unsigned NumArcs(int s)
+        Fst* Copy()
+        bint Write(string& filename)
+
+    cdef cppclass ExpandedFst(Fst):
+        int NumStates()
+
+    cdef cppclass MutableFst(ExpandedFst):
+        int AddState()
+        void SetFinal(int s, Weight w)
+        void SetStart(int s)
+        void SetInputSymbols(sym.SymbolTable* isyms)
+        void SetOutputSymbols(sym.SymbolTable* osyms)
+        sym.SymbolTable* MutableInputSymbols()
+        sym.SymbolTable* MutableOutputSymbols()
+        void AddArc(int s, Arc &arc)
+
+    cdef cppclass TropicalWeight(Weight):
         float Value()
+        TropicalWeight(float value)
+        TropicalWeight(TropicalWeight weight)
         bint operator==(TropicalWeight& other)
         TropicalWeight& set_value "operator=" (TropicalWeight& other)
 
@@ -17,43 +52,19 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
     cdef TropicalWeight TropicalZero "fst::TropicalWeight::Zero" ()
     cdef TropicalWeight TropicalOne "fst::TropicalWeight::One" ()
 
-    cdef cppclass StdArc "const fst::StdArc":
-        StdArc(int ilabel, int olabel, TropicalWeight& weight, int nextstate)
-        StdArc()
-        int ilabel
-        int olabel
+    cdef cppclass StdArc(Arc):
+        StdArc(int ilabel, int olabel, Weight& weight, int nextstate)
         TropicalWeight weight
-        int nextstate
 
-    cdef cppclass ArcIterator "fst::ArcIterator<fst::StdVectorFst>":
-        ArcIterator(StdVectorFst& fst, int state)
-        bint Done()
-        void Next()
-        StdArc& Value()
-
-    cdef cppclass StdVectorFst:
-        StdVectorFst()
-        int Start()
-        TropicalWeight Final(int s)
-        int NumStates()
-        unsigned NumArcs(int s)
-        void SetFinal(int s, TropicalWeight w)
-        void SetStart(int s)
-        int AddState()
-        void AddArc(int s, StdArc &arc)
-        bint Write(string& filename)
-        StdVectorFst* Copy()
-        sym.SymbolTable* MutableInputSymbols()
-        sym.SymbolTable* MutableOutputSymbols()
-        void SetInputSymbols(sym.SymbolTable* isyms)
-        void SetOutputSymbols(sym.SymbolTable* osyms)
+    cdef cppclass StdVectorFst(MutableFst):
+        pass
 
     cdef StdVectorFst* StdVectorFstRead "fst::StdVectorFst::Read" (string& filename)
 
-    cdef cppclass ILabelCompare "fst::OLabelCompare<fst::StdArc>":
+    cdef cppclass ILabelCompare[A]:
         pass
 
-    cdef cppclass OLabelCompare "fst::OLabelCompare<fst::StdArc>":
+    cdef cppclass OLabelCompare[A]:
         pass
 
     enum ProjectType:
@@ -64,28 +75,29 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
         CLOSURE_STAR
         CLOSURE_PLUS
 
-    cdef bint Equivalent(StdVectorFst& fst1, StdVectorFst& fst2)
+    cdef bint Equivalent(Fst& fst1, Fst& fst2)
 
     # const
-    cdef void Determinize(StdVectorFst& ifst, StdVectorFst* ofst)
-    cdef void Compose(StdVectorFst &ifst1, StdVectorFst &ifst2, StdVectorFst *ofst)
-    cdef void ShortestDistance(StdVectorFst &fst, vector[TropicalWeight] *distance, bint reverse)
-    cdef void ShortestPath(StdVectorFst &ifst, StdVectorFst *ofst, unsigned n)
-    cdef void Intersect(StdVectorFst &ifst1, StdVectorFst &ifst2, StdVectorFst *ofst)
-    cdef void Difference(StdVectorFst &ifst1, StdVectorFst &ifst2, StdVectorFst *ofst)
-    cdef void Reverse(StdVectorFst &ifst, StdVectorFst* ofst)
+    cdef void Compose(Fst &ifst1, Fst &ifst2, MutableFst* ofst)
+    cdef void Determinize(Fst& ifst, MutableFst* ofst)
+    cdef void Difference(Fst &ifst1, Fst &ifst2, MutableFst* ofst)
+    cdef void Intersect(Fst &ifst1, Fst &ifst2, MutableFst* ofst)
+    cdef void Reverse(Fst &ifst, MutableFst* ofst)
+    cdef void ShortestDistance(Fst &fst, vector[TropicalWeight]* distance, bint reverse)
+    cdef void ShortestPath(Fst &ifst, MutableFst* ofst, unsigned n)
     # non const
-    cdef void Minimize(StdVectorFst *ifst)
-    cdef void ArcSort(StdVectorFst *fst, ILabelCompare& compare)
-    cdef void ArcSort(StdVectorFst *fst, OLabelCompare& compare)
-    cdef void Project(StdVectorFst *fst, ProjectType type)
-    cdef void RmEpsilon(StdVectorFst* fst)
-    cdef void TopSort(StdVectorFst* fst)
-    cdef void Relabel(StdVectorFst* fst, 
+    cdef void ArcSort(MutableFst* fst, ILabelCompare[StdArc]& compare)
+    cdef void ArcSort(MutableFst* fst, OLabelCompare[StdArc]& compare)
+    cdef void Closure(MutableFst* ifst, ClosureType type)
+    cdef void Invert(MutableFst* ifst)
+    cdef void Minimize(MutableFst* fst)
+    cdef void Project(MutableFst* fst, ProjectType type)
+    cdef void Prune(MutableFst* ifst, TropicalWeight threshold)
+    cdef void Relabel(MutableFst* fst, 
             vector[pair[int, int]]& ipairs,
             vector[pair[int, int]]& opairs)
-    cdef void Union(StdVectorFst *ifst1, StdVectorFst &ifst2)
-    cdef void Concat(StdVectorFst *ifst1, StdVectorFst &ifst2)
-    cdef void Closure(StdVectorFst* ifst, ClosureType type)
-    cdef void Invert(StdVectorFst* ifst)
-    cdef void Prune(StdVectorFst* ifst, TropicalWeight threshold)
+    cdef void RmEpsilon(MutableFst* fst)
+    cdef void TopSort(MutableFst* fst)
+    # other
+    cdef void Union(MutableFst* ifst1, Fst &ifst2)
+    cdef void Concat(MutableFst* ifst1, Fst &ifst2)
