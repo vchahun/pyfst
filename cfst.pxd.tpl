@@ -89,6 +89,19 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
     cdef cppclass OLabelCompare[A]:
         pass
 
+    cdef cppclass ArcMapper:
+        pass
+
+{{#types}}
+    cdef cppclass Plus{{arc}}Mapper "fst::PlusMapper<fst::{{arc}}>"(ArcMapper):
+        Plus{{arc}}Mapper({{weight}})
+    cdef cppclass Times{{arc}}Mapper "fst::TimesMapper<fst::{{arc}}>"(ArcMapper):
+        Times{{arc}}Mapper({{weight}})
+    cdef cppclass {{convert}}WeightConvertMapper "fst::WeightConvertMapper<fst::{{other}}Arc, fst::{{arc}}>"(ArcMapper):
+        {{convert}}WeightConvertMapper()
+{{/types}}
+        
+
     enum ProjectType:
         PROJECT_INPUT
         PROJECT_OUTPUT
@@ -105,16 +118,12 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
     cdef void Difference(Fst &ifst1, Fst &ifst2, MutableFst* ofst)
     cdef void Intersect(Fst &ifst1, Fst &ifst2, MutableFst* ofst)
     cdef void Reverse(Fst &ifst, MutableFst* ofst)
+    cdef void ShortestPath(Fst &ifst, MutableFst* ofst, unsigned n)
+    cdef void ArcMap (Fst &ifst, MutableFst* ofst, ArcMapper mapper)
 {{#types}}
     cdef void ShortestDistance(Fst &fst, vector[{{weight}}]* distance, bint reverse)
 {{/types}}
-    cdef void ShortestPath(Fst &ifst, MutableFst* ofst, unsigned n)
     # non const
-{{#types}}
-    cdef void ArcSort(MutableFst* fst, ILabelCompare[{{arc}}]& compare)
-    cdef void ArcSort(MutableFst* fst, OLabelCompare[{{arc}}]& compare)
-    cdef void Prune(MutableFst* ifst, {{weight}} threshold)
-{{/types}}
     cdef void Closure(MutableFst* ifst, ClosureType type)
     cdef void Invert(MutableFst* ifst)
     cdef void Minimize(MutableFst* fst)
@@ -124,6 +133,11 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
             vector[pair[int, int]]& opairs)
     cdef void RmEpsilon(MutableFst* fst)
     cdef void TopSort(MutableFst* fst)
+{{#types}}
+    cdef void ArcSort(MutableFst* fst, ILabelCompare[{{arc}}]& compare)
+    cdef void ArcSort(MutableFst* fst, OLabelCompare[{{arc}}]& compare)
+    cdef void Prune(MutableFst* ifst, {{weight}} threshold)
+{{/types}}
     # other
     cdef void Union(MutableFst* ifst1, Fst &ifst2)
     cdef void Concat(MutableFst* ifst1, Fst &ifst2)

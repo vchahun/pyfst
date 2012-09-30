@@ -237,8 +237,14 @@ cdef class StdVectorFst(Fst):
     cdef SymbolTable _isyms
     cdef SymbolTable _osyms
 
-    def __init__(self):
-        self.fst = new cfst.StdVectorFst()
+    def __init__(self, source=None):
+        if isinstance(source, StdVectorFst):
+            self.fst = <cfst.StdVectorFst*> self.fst.Copy()
+        else:
+            self.fst = new cfst.StdVectorFst()
+            if isinstance(source, LogVectorFst):
+                cfst.ArcMap((<LogVectorFst> source).fst[0], self.fst,
+                    cfst.LogToStdWeightConvertMapper())
 
     def __dealloc__(self):
         del self.fst
@@ -481,6 +487,22 @@ cdef class StdVectorFst(Fst):
             threshold = TropicalWeight(threshold)
         cfst.Prune(self.fst, (<TropicalWeight> threshold).weight[0])
 
+    def plus_map(self, value):
+        cdef StdVectorFst result = StdVectorFst()
+        if not isinstance(value, TropicalWeight):
+            value = TropicalWeight(value)
+        cfst.ArcMap(self.fst[0], result.fst,
+            cfst.PlusStdArcMapper((<TropicalWeight> value).weight[0]))
+        return result
+
+    def times_map(self, value):
+        cdef StdVectorFst result = StdVectorFst()
+        if not isinstance(value, TropicalWeight):
+            value = TropicalWeight(value)
+        cfst.ArcMap(self.fst[0], result.fst,
+            cfst.TimesStdArcMapper((<TropicalWeight> value).weight[0]))
+        return result
+
     def draw(self, SymbolTable isyms=None,
             SymbolTable osyms=None,
             SymbolTable ssyms=None):
@@ -640,8 +662,14 @@ cdef class LogVectorFst(Fst):
     cdef SymbolTable _isyms
     cdef SymbolTable _osyms
 
-    def __init__(self):
-        self.fst = new cfst.LogVectorFst()
+    def __init__(self, source=None):
+        if isinstance(source, LogVectorFst):
+            self.fst = <cfst.LogVectorFst*> self.fst.Copy()
+        else:
+            self.fst = new cfst.LogVectorFst()
+            if isinstance(source, StdVectorFst):
+                cfst.ArcMap((<StdVectorFst> source).fst[0], self.fst,
+                    cfst.StdToLogWeightConvertMapper())
 
     def __dealloc__(self):
         del self.fst
@@ -883,6 +911,22 @@ cdef class LogVectorFst(Fst):
         if not isinstance(threshold, LogWeight):
             threshold = LogWeight(threshold)
         cfst.Prune(self.fst, (<LogWeight> threshold).weight[0])
+
+    def plus_map(self, value):
+        cdef LogVectorFst result = LogVectorFst()
+        if not isinstance(value, LogWeight):
+            value = LogWeight(value)
+        cfst.ArcMap(self.fst[0], result.fst,
+            cfst.PlusLogArcMapper((<LogWeight> value).weight[0]))
+        return result
+
+    def times_map(self, value):
+        cdef LogVectorFst result = LogVectorFst()
+        if not isinstance(value, LogWeight):
+            value = LogWeight(value)
+        cfst.ArcMap(self.fst[0], result.fst,
+            cfst.TimesLogArcMapper((<LogWeight> value).weight[0]))
+        return result
 
     def draw(self, SymbolTable isyms=None,
             SymbolTable osyms=None,

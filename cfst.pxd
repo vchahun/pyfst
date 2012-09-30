@@ -102,6 +102,23 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
     cdef cppclass OLabelCompare[A]:
         pass
 
+    cdef cppclass ArcMapper:
+        pass
+
+    cdef cppclass PlusStdArcMapper "fst::PlusMapper<fst::StdArc>"(ArcMapper):
+        PlusStdArcMapper(TropicalWeight)
+    cdef cppclass TimesStdArcMapper "fst::TimesMapper<fst::StdArc>"(ArcMapper):
+        TimesStdArcMapper(TropicalWeight)
+    cdef cppclass LogToStdWeightConvertMapper "fst::WeightConvertMapper<fst::LogArc, fst::StdArc>"(ArcMapper):
+        LogToStdWeightConvertMapper()
+    cdef cppclass PlusLogArcMapper "fst::PlusMapper<fst::LogArc>"(ArcMapper):
+        PlusLogArcMapper(LogWeight)
+    cdef cppclass TimesLogArcMapper "fst::TimesMapper<fst::LogArc>"(ArcMapper):
+        TimesLogArcMapper(LogWeight)
+    cdef cppclass StdToLogWeightConvertMapper "fst::WeightConvertMapper<fst::StdArc, fst::LogArc>"(ArcMapper):
+        StdToLogWeightConvertMapper()
+        
+
     enum ProjectType:
         PROJECT_INPUT
         PROJECT_OUTPUT
@@ -118,16 +135,11 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
     cdef void Difference(Fst &ifst1, Fst &ifst2, MutableFst* ofst)
     cdef void Intersect(Fst &ifst1, Fst &ifst2, MutableFst* ofst)
     cdef void Reverse(Fst &ifst, MutableFst* ofst)
+    cdef void ShortestPath(Fst &ifst, MutableFst* ofst, unsigned n)
+    cdef void ArcMap (Fst &ifst, MutableFst* ofst, ArcMapper mapper)
     cdef void ShortestDistance(Fst &fst, vector[TropicalWeight]* distance, bint reverse)
     cdef void ShortestDistance(Fst &fst, vector[LogWeight]* distance, bint reverse)
-    cdef void ShortestPath(Fst &ifst, MutableFst* ofst, unsigned n)
     # non const
-    cdef void ArcSort(MutableFst* fst, ILabelCompare[StdArc]& compare)
-    cdef void ArcSort(MutableFst* fst, OLabelCompare[StdArc]& compare)
-    cdef void Prune(MutableFst* ifst, TropicalWeight threshold)
-    cdef void ArcSort(MutableFst* fst, ILabelCompare[LogArc]& compare)
-    cdef void ArcSort(MutableFst* fst, OLabelCompare[LogArc]& compare)
-    cdef void Prune(MutableFst* ifst, LogWeight threshold)
     cdef void Closure(MutableFst* ifst, ClosureType type)
     cdef void Invert(MutableFst* ifst)
     cdef void Minimize(MutableFst* fst)
@@ -137,6 +149,12 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
             vector[pair[int, int]]& opairs)
     cdef void RmEpsilon(MutableFst* fst)
     cdef void TopSort(MutableFst* fst)
+    cdef void ArcSort(MutableFst* fst, ILabelCompare[StdArc]& compare)
+    cdef void ArcSort(MutableFst* fst, OLabelCompare[StdArc]& compare)
+    cdef void Prune(MutableFst* ifst, TropicalWeight threshold)
+    cdef void ArcSort(MutableFst* fst, ILabelCompare[LogArc]& compare)
+    cdef void ArcSort(MutableFst* fst, OLabelCompare[LogArc]& compare)
+    cdef void Prune(MutableFst* ifst, LogWeight threshold)
     # other
     cdef void Union(MutableFst* ifst1, Fst &ifst2)
     cdef void Concat(MutableFst* ifst1, Fst &ifst2)

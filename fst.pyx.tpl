@@ -238,8 +238,14 @@ cdef class {{fst}}(Fst):
     cdef SymbolTable _isyms
     cdef SymbolTable _osyms
 
-    def __init__(self):
-        self.fst = new cfst.{{fst}}()
+    def __init__(self, source=None):
+        if isinstance(source, {{fst}}):
+            self.fst = <cfst.{{fst}}*> self.fst.Copy()
+        else:
+            self.fst = new cfst.{{fst}}()
+            if isinstance(source, {{other}}VectorFst):
+                cfst.ArcMap((<{{other}}VectorFst> source).fst[0], self.fst,
+                    cfst.{{convert}}WeightConvertMapper())
 
     def __dealloc__(self):
         del self.fst
@@ -481,6 +487,22 @@ cdef class {{fst}}(Fst):
         if not isinstance(threshold, {{weight}}):
             threshold = {{weight}}(threshold)
         cfst.Prune(self.fst, (<{{weight}}> threshold).weight[0])
+
+    def plus_map(self, value):
+        cdef {{fst}} result = {{fst}}()
+        if not isinstance(value, {{weight}}):
+            value = {{weight}}(value)
+        cfst.ArcMap(self.fst[0], result.fst,
+            cfst.Plus{{arc}}Mapper((<{{weight}}> value).weight[0]))
+        return result
+
+    def times_map(self, value):
+        cdef {{fst}} result = {{fst}}()
+        if not isinstance(value, {{weight}}):
+            value = {{weight}}(value)
+        cfst.ArcMap(self.fst[0], result.fst,
+            cfst.Times{{arc}}Mapper((<{{weight}}> value).weight[0]))
+        return result
 
     def draw(self, SymbolTable isyms=None,
             SymbolTable osyms=None,
