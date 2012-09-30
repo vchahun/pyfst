@@ -54,36 +54,23 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
         string ArcType()
         string FstType()
 
-    cdef cppclass TropicalWeight(Weight):
+{{#types}}
+    cdef cppclass {{weight}}(Weight):
         float Value()
-        TropicalWeight(float value)
-        TropicalWeight(TropicalWeight weight)
-        bint operator==(TropicalWeight& other)
-        TropicalWeight& set_value "operator=" (TropicalWeight& other)
+        {{weight}}(float value)
+        {{weight}}({{weight}} weight)
+        bint operator==({{weight}}& other)
+        {{weight}}& set_value "operator=" ({{weight}}& other)
 
-    cdef TropicalWeight Plus(TropicalWeight &w1, TropicalWeight& w2)
-    cdef TropicalWeight Times(TropicalWeight &w1, TropicalWeight& w2)
+    cdef {{weight}} Plus({{weight}} &w1, {{weight}}& w2)
+    cdef {{weight}} Times({{weight}} &w1, {{weight}}& w2)
 
-    cdef TropicalWeight TropicalWeightZero "fst::TropicalWeight::Zero" ()
-    cdef TropicalWeight TropicalWeightOne "fst::TropicalWeight::One" ()
+    cdef {{weight}} {{weight}}Zero "fst::{{weight}}::Zero" ()
+    cdef {{weight}} {{weight}}One "fst::{{weight}}::One" ()
 
-    ctypedef Arc[TropicalWeight] StdArc
+    ctypedef Arc[{{weight}}] {{arc}}
 
-    cdef cppclass LogWeight(Weight):
-        float Value()
-        LogWeight(float value)
-        LogWeight(LogWeight weight)
-        bint operator==(LogWeight& other)
-        LogWeight& set_value "operator=" (LogWeight& other)
-
-    cdef LogWeight Plus(LogWeight &w1, LogWeight& w2)
-    cdef LogWeight Times(LogWeight &w1, LogWeight& w2)
-
-    cdef LogWeight LogWeightZero "fst::LogWeight::Zero" ()
-    cdef LogWeight LogWeightOne "fst::LogWeight::One" ()
-
-    ctypedef Arc[LogWeight] LogArc
-
+{{/types}}
 
     cdef cppclass StdVectorFst(MutableFst):
         TropicalWeight Final(int s)
@@ -118,16 +105,16 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
     cdef void Difference(Fst &ifst1, Fst &ifst2, MutableFst* ofst)
     cdef void Intersect(Fst &ifst1, Fst &ifst2, MutableFst* ofst)
     cdef void Reverse(Fst &ifst, MutableFst* ofst)
-    cdef void ShortestDistance(Fst &fst, vector[TropicalWeight]* distance, bint reverse)
-    cdef void ShortestDistance(Fst &fst, vector[LogWeight]* distance, bint reverse)
+{{#types}}
+    cdef void ShortestDistance(Fst &fst, vector[{{weight}}]* distance, bint reverse)
+{{/types}}
     cdef void ShortestPath(Fst &ifst, MutableFst* ofst, unsigned n)
     # non const
-    cdef void ArcSort(MutableFst* fst, ILabelCompare[StdArc]& compare)
-    cdef void ArcSort(MutableFst* fst, OLabelCompare[StdArc]& compare)
-    cdef void Prune(MutableFst* ifst, TropicalWeight threshold)
-    cdef void ArcSort(MutableFst* fst, ILabelCompare[LogArc]& compare)
-    cdef void ArcSort(MutableFst* fst, OLabelCompare[LogArc]& compare)
-    cdef void Prune(MutableFst* ifst, LogWeight threshold)
+{{#types}}
+    cdef void ArcSort(MutableFst* fst, ILabelCompare[{{arc}}]& compare)
+    cdef void ArcSort(MutableFst* fst, OLabelCompare[{{arc}}]& compare)
+    cdef void Prune(MutableFst* ifst, {{weight}} threshold)
+{{/types}}
     cdef void Closure(MutableFst* ifst, ClosureType type)
     cdef void Invert(MutableFst* ifst)
     cdef void Minimize(MutableFst* fst)

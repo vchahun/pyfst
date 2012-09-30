@@ -1,6 +1,6 @@
-from fst import Fst
+from fst import StdVectorFst
 
-fst = Fst()
+fst = StdVectorFst()
 
 fst.start = fst.add_state()
 
@@ -11,6 +11,6 @@ fst.add_state()
 fst.add_arc(1, 2, 3, 3, 2.5)
 
 fst.add_state()
-fst.set_final(2, 3.5)
+fst[2].final = 3.5
 
 fst.write('binary.fst')

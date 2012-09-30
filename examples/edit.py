@@ -8,14 +8,14 @@ def make_input(word, syms):
     Make a charcter input transducer:
     [0] =w:w=> 1 =o:o=> 2 =r:r=> 3 =d:d=> (4) 
     """
-    inp = fst.Fst()
+    inp = fst.StdVectorFst()
     inp.start = inp.add_state()
     source = inp.start
     for c in word:
         dest = inp.add_state()
         inp.add_arc(source, dest, syms[c], syms[c])
         source = dest
-    inp.set_final(source)
+    inp[source].final = True
     return inp
 
 def make_edit(sigma):
@@ -23,9 +23,9 @@ def make_edit(sigma):
     # Create transducer
     syms = fst.SymbolTable()
     sigma.add('<eps>')
-    edit = fst.Fst()
+    edit = fst.StdVectorFst()
     edit.start = edit.add_state()
-    edit.set_final(0)
+    edit[0].final = True
     for x in sigma:
         for y in sigma:
             if x == y == '<eps>': continue
@@ -44,7 +44,8 @@ def make_edit(sigma):
         alignment.top_sort()
         # Replace "<eps>" -> "-"
         dash = syms['-']
-        alignment.relabel(ipairs=[(0, dash)], opairs=[(0, dash)])
+        eps = syms['<eps>']
+        alignment.relabel(ipairs=[(eps, dash)], opairs=[(eps, dash)])
         arcs = (next(iter(state)) for state in alignment)
         labels = ((arc.ilabel, arc.olabel) for arc in arcs)
         align = [(syms.find(x), syms.find(y)) for x, y in labels]

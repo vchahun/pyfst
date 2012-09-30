@@ -5,7 +5,7 @@ ext_modules = [
     Extension(name='fst',
         sources=['fst.cpp'],
         include_dirs=['.'],
-        libraries=['z', 'fst', 'fstscript'],
+        libraries=['z', 'fst'],
         extra_compile_args=['-O2'])
 ]
 

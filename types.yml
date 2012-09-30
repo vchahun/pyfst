@@ -1,0 +1,11 @@
+---
+types:
+    - weight: TropicalWeight
+      arc:    StdArc
+      state:  StdState
+      fst:    StdVectorFst
+    - weight: LogWeight
+      arc:    LogArc
+      state:  LogState
+      fst:    LogVectorFst
+---
