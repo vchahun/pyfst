@@ -3,6 +3,7 @@ from util cimport istream
 
 cdef extern from "<fst/symbol-table.h>" namespace "fst":    
     cdef cppclass SymbolTable:
+        SymbolTable(SymbolTable&)
         SymbolTable(string &name)
         long AddSymbol(string &symbol, long key)
         long AddSymbol(string &symbol)

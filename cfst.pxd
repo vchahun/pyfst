@@ -109,12 +109,16 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
         PlusStdArcMapper(TropicalWeight)
     cdef cppclass TimesStdArcMapper "fst::TimesMapper<fst::StdArc>"(ArcMapper):
         TimesStdArcMapper(TropicalWeight)
+    cdef cppclass RmTropicalWeightMapper "fst::RmWeightMapper<fst::StdArc>"(ArcMapper):
+        RmTropicalWeightMapper()
     cdef cppclass LogToStdWeightConvertMapper "fst::WeightConvertMapper<fst::LogArc, fst::StdArc>"(ArcMapper):
         LogToStdWeightConvertMapper()
     cdef cppclass PlusLogArcMapper "fst::PlusMapper<fst::LogArc>"(ArcMapper):
         PlusLogArcMapper(LogWeight)
     cdef cppclass TimesLogArcMapper "fst::TimesMapper<fst::LogArc>"(ArcMapper):
         TimesLogArcMapper(LogWeight)
+    cdef cppclass RmLogWeightMapper "fst::RmWeightMapper<fst::LogArc>"(ArcMapper):
+        RmLogWeightMapper()
     cdef cppclass StdToLogWeightConvertMapper "fst::WeightConvertMapper<fst::StdArc, fst::LogArc>"(ArcMapper):
         StdToLogWeightConvertMapper()
         

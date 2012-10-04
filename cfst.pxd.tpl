@@ -97,6 +97,8 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
         Plus{{arc}}Mapper({{weight}})
     cdef cppclass Times{{arc}}Mapper "fst::TimesMapper<fst::{{arc}}>"(ArcMapper):
         Times{{arc}}Mapper({{weight}})
+    cdef cppclass Rm{{weight}}Mapper "fst::RmWeightMapper<fst::{{arc}}>"(ArcMapper):
+        Rm{{weight}}Mapper()
     cdef cppclass {{convert}}WeightConvertMapper "fst::WeightConvertMapper<fst::{{other}}Arc, fst::{{arc}}>"(ArcMapper):
         {{convert}}WeightConvertMapper()
 {{/types}}
