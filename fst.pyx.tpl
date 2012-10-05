@@ -46,14 +46,13 @@ def read_log(filename):
     return fst
 
 def read_symbols(filename):
-    """read_symbols(filename): read a symbol table"""
+    """read_symbols(filename): read a binaray symbol table"""
     filename = as_str(filename)
     cdef ifstream* fstream = new ifstream(filename)
     cdef SymbolTable table = SymbolTable.__new__(SymbolTable)
     cdef sym.SymbolTable* syms = sym.SymbolTableRead(fstream[0], filename)
     table.table = new sym.SymbolTable(syms[0])
-    del syms
-    del fstream
+    del syms, fstream
     return table
 
 cdef class SymbolTable:
@@ -76,6 +75,9 @@ cdef class SymbolTable:
     def __getitem__(self, sym):
         return self.table.AddSymbol(as_str(sym))
 
+    def __setitem__(self, sym, long key):
+        self.table.AddSymbol(as_str(sym), key)
+
     def write(self, filename):
         """write(filename): save the symbol table to filename"""
         self.table.Write(as_str(filename))
@@ -89,11 +91,18 @@ cdef class SymbolTable:
     def __len__(self):
         return self.table.NumSymbols()
 
-    def __iter__(self):
-        # TODO: use SymbolTableIterator?
-        cdef unsigned i
-        for i in range(len(self)):
-            yield self.find(i)
+    def items(self):
+        cdef sym.SymbolTableIterator* it = new sym.SymbolTableIterator(self.table[0])
+        while not it.Done():
+            yield (it.Symbol(), it.Value())
+            it.Next()
+
+    def __richcmp__(SymbolTable x, SymbolTable y, int op):
+        if op == 2: # ==
+            return x.table.CheckSum() == y.table.CheckSum()
+        elif op == 3: # !=
+            return not (x == y)
+        raise NotImplemented('comparison not implemented for SymbolTable')
 
     def __str__(self):
         return '<SymbolTable of size %d>' % len(self)
@@ -217,6 +226,10 @@ cdef class {{state}}:
         finally:
             del it
 
+    property arcs:
+        def __get__(self):
+            return iter(self)
+
     property final:
         def __get__(self):
             cdef {{weight}} weight = {{weight}}.__new__({{weight}})
@@ -297,6 +310,10 @@ cdef class {{fst}}(Fst):
         for i in range(len(self)):
             yield self[i]
 
+    property states:
+        def __get__(self):
+            return iter(self)
+
     property start:
         def __get__(self):
             return self.fst.Start()
@@ -332,7 +349,10 @@ cdef class {{fst}}(Fst):
             self.fst.SetInputSymbols(self.isyms.table)
         if self.osyms:
             self.fst.SetOutputSymbols(self.osyms.table)
-        return self.fst.Write(as_str(filename))
+        result = self.fst.Write(as_str(filename))
+        self.fst.SetInputSymbols(NULL)
+        self.fst.SetOutputSymbols(NULL)
+        return bool(result)
 
     property deterministic:
         def __get__(self):
@@ -346,7 +366,7 @@ cdef class {{fst}}(Fst):
 
     def compose(self, {{fst}} other):
         """fst.compose({{fst}} other) == fst >> other -> composed transducer"""
-        cdef {{fst}} result = {{fst}}(isyms=self.isyms, osyms=self.osyms)
+        cdef {{fst}} result = {{fst}}(isyms=self.isyms, osyms=other.osyms)
         cfst.Compose(self.fst[0], other.fst[0], result.fst)
         return result
 
@@ -419,7 +439,7 @@ cdef class {{fst}}(Fst):
 
     def reverse(self):
         """fst.reverse() -> reversed transducer"""
-        cdef {{fst}} result = {{fst}}(isyms=self.isyms, osyms=self.osyms)
+        cdef {{fst}} result = {{fst}}(isyms=self.osyms, osyms=self.isyms)
         cfst.Reverse(self.fst[0], result.fst)
         return result
 

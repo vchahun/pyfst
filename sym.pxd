@@ -3,7 +3,7 @@ from util cimport istream
 
 cdef extern from "<fst/symbol-table.h>" namespace "fst":    
     cdef cppclass SymbolTable:
-        SymbolTable(SymbolTable&)
+        SymbolTable(SymbolTable &table)
         SymbolTable(string &name)
         long AddSymbol(string &symbol, long key)
         long AddSymbol(string &symbol)
@@ -13,6 +13,15 @@ cdef extern from "<fst/symbol-table.h>" namespace "fst":
         string Find(long key)
         string Find(char* symbol)
         unsigned NumSymbols()
+        string CheckSum()
+
+    cdef cppclass SymbolTableIterator:
+        SymbolTableIterator(SymbolTable& table)
+        bint Done()
+        long Value()
+        string Symbol()
+        void Next()
+        void Reset()
 
     cdef SymbolTable* SymbolTableRead "fst::SymbolTable::Read" (istream &strm,
             string& source)
