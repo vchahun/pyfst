@@ -6,10 +6,12 @@ types:
       fst:      StdVectorFst
       other:    Log
       convert:  LogToStd
+      semiring: tropical
     - weight:   LogWeight
       arc:      LogArc
       state:    LogState
       fst:      LogVectorFst
       other:    Std
       convert:  StdToLog
+      semiring: log
 ---

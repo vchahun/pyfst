@@ -7,9 +7,9 @@ from util cimport ostream, istream
 cimport sym
 
 cdef extern from "<fst/fstlib.h>" namespace "fst":
-
     enum:
         kIDeterministic
+        kODeterministic
         kAcceptor
         kTopSorted
         kWeighted

@@ -8,7 +8,8 @@ from libcpp.pair cimport pair
 from libc.stdint cimport uint64_t
 from util cimport ifstream, ostringstream
 
-EPSILON = 0
+EPSILON_ID = 0
+EPSILON = u'\u03b5'
 
 cdef bytes as_str(data):
     if isinstance(data, bytes):
@@ -18,7 +19,8 @@ cdef bytes as_str(data):
     raise TypeError('Cannot convert %s to string' % type(data))
 
 def read(filename):
-    """read(filename): read a transducer from the binary filename & detect arc type"""
+    """read(filename) -> transducer read from the binary file
+    Detect arc type (has to be LogArc or TropicalArc) and produce specific transducer."""
     filename = as_str(filename)
     cdef ifstream* stream = new ifstream(filename)
     cdef cfst.FstHeader* header = new cfst.FstHeader()
@@ -32,21 +34,21 @@ def read(filename):
     raise TypeError('cannot read transducer with arcs of type {0}'.format(arc_type))
 
 def read_std(filename):
-    """read_std(filename): read a StdVectorFst from the binary filename"""
+    """read_std(filename) -> StdVectorFst read from the binary file"""
     cdef StdVectorFst fst = StdVectorFst.__new__(StdVectorFst)
     fst.fst = cfst.StdVectorFstRead(as_str(filename))
     fst._init_tables()
     return fst
 
 def read_log(filename):
-    """read_log(filename): read a LogVectorFst from the binary filename"""
+    """read_log(filename) -> LogVectorFst read from the binary file"""
     cdef LogVectorFst fst = LogVectorFst.__new__(LogVectorFst)
     fst.fst = cfst.LogVectorFstRead(as_str(filename))
     fst._init_tables()
     return fst
 
 def read_symbols(filename):
-    """read_symbols(filename): read a binaray symbol table"""
+    """read_symbols(filename) -> SymbolTable read from the binary file"""
     filename = as_str(filename)
     cdef ifstream* fstream = new ifstream(filename)
     cdef SymbolTable table = SymbolTable.__new__(SymbolTable)
@@ -56,18 +58,20 @@ def read_symbols(filename):
     return table
 
 cdef class SymbolTable:
-    """SymbolTable() -> empty symbol table"""
     cdef sym.SymbolTable* table
 
-    def __init__(self):
+    def __init__(self, epsilon=EPSILON):
+        """SymbolTable() -> new symbol table with \u03b5 <-> 0
+        SymbolTable(epsilon) -> new symbol table with epsilon <-> 0"""
         cdef bytes name = 'SymbolTable<{0}>'.format(id(self))
         self.table = new sym.SymbolTable(<string> name)
-        self.table.AddSymbol('<eps>')
+        assert (self[epsilon] == EPSILON_ID)
 
     def __dealloc__(self):
         del self.table
 
     def copy(self):
+        """table.copy() -> copy of the symbol table"""
         cdef SymbolTable result = SymbolTable.__new__(SymbolTable)
         result.table = new sym.SymbolTable(self.table[0])
         return result
@@ -79,19 +83,18 @@ cdef class SymbolTable:
         self.table.AddSymbol(as_str(sym), key)
 
     def write(self, filename):
-        """write(filename): save the symbol table to filename"""
+        """table.write(filename): save the symbol table to filename"""
         self.table.Write(as_str(filename))
 
     def find(self, long key):
-        """find(int key) -> decoded symbol"""
-        if not 0 <= key < len(self):
-            raise KeyError('symbol table index out of range')
-        return self.table.Find(key).c_str()
+        """table.find(int key) -> decoded symbol"""
+        return self.table.Find(key)
 
     def __len__(self):
         return self.table.NumSymbols()
 
     def items(self):
+        """table.items() -> iterator over (symbol, value) pairs"""
         cdef sym.SymbolTableIterator* it = new sym.SymbolTableIterator(self.table[0])
         while not it.Done():
             yield (it.Symbol(), it.Value())
@@ -126,13 +129,13 @@ cdef class Fst:
 {{#types}}
 
 cdef class {{weight}}:
-    """A weight on the tropical semiring"""
     cdef cfst.{{weight}}* weight
 
     ZERO = {{weight}}(cfst.{{weight}}Zero().Value())
     ONE = {{weight}}(cfst.{{weight}}One().Value())
 
     def __init__(self, value):
+        """{{weight}}(value) -> {{semiring}} weight initialized with the given value"""
         self.weight = new cfst.{{weight}}((cfst.{{weight}}One() if value is True or value is None
                         else cfst.{{weight}}Zero() if value is False
                         else cfst.{{weight}}(float(value))))
@@ -178,10 +181,10 @@ cdef class {{weight}}:
         self.weight = new cfst.{{weight}}(cfst.Times(self.weight[0], other.weight[0]))
 
 cdef class {{arc}}:
-    """A transducer arc"""
     cdef cfst.{{arc}}* arc
 
     def __init__(self):
+        """A {{fst}} arc (with a {{semiring}} weight)"""
         raise NotImplemented('cannot create independent arc')
 
     property ilabel:
@@ -203,11 +206,11 @@ cdef class {{arc}}:
             return weight
 
 cdef class {{state}}:
-    """A transducer state"""
     cdef public int stateid
     cdef cfst.{{fst}}* fst
 
     def __init__(self):
+        """A {{fst}} state (with {{arc}} arcs)"""
         raise NotImplemented('cannot create independent state')
 
     def __len__(self):
@@ -227,6 +230,7 @@ cdef class {{state}}:
             del it
 
     property arcs:
+        """state.arcs: all the arcs starting from this state"""
         def __get__(self):
             return iter(self)
 
@@ -252,11 +256,12 @@ cdef class {{state}}:
                 self.fst.SetStart(-1)
 
 cdef class {{fst}}(Fst):
-    """{{fst}}() -> empty finite-state transducer"""
     cdef cfst.{{fst}}* fst
     cdef public SymbolTable isyms, osyms
 
     def __init__(self, source=None, isyms=None, osyms=None):
+        """{{fst}}(isyms=None, osyms=None) -> empty finite-state transducer
+        {{fst}}(source) -> copy of the source transducer"""
         if isinstance(source, {{fst}}):
             self.fst = <cfst.{{fst}}*> self.fst.Copy()
         else:
@@ -322,7 +327,7 @@ cdef class {{fst}}(Fst):
             self.fst.SetStart(start)
 
     def add_arc(self, int source, int dest, int ilabel, int olabel, weight=None):
-        """fst.add_arc(int source, int dest, int ilabel, int olabel, weight=None):
+        """fst.add_arc(int source, int dest, int ilabel, int olabel, weight=None)
         add an arc source->dest labeled with labels ilabel:olabel and weighted with weight"""
         if source > self.fst.NumStates()-1:
             raise ValueError('invalid source state id ({0} > {0})'.format(source, self.fst.NumStates()-1))
@@ -343,20 +348,29 @@ cdef class {{fst}}(Fst):
             return not (x == y)
         raise NotImplemented('comparison not implemented for {{fst}}')
 
-    def write(self, filename):
+    def write(self, filename, keep_isyms=False, keep_osyms=False):
         """fst.write(filename): write the binary representation of the transducer in filename"""
-        if self.isyms:
+        if keep_isyms and self.isyms is not None:
             self.fst.SetInputSymbols(self.isyms.table)
-        if self.osyms:
+        if keep_osyms and self.osyms is not None:
             self.fst.SetOutputSymbols(self.osyms.table)
         result = self.fst.Write(as_str(filename))
+        # reset symbols:
         self.fst.SetInputSymbols(NULL)
         self.fst.SetOutputSymbols(NULL)
-        return bool(result)
+        return result
 
-    property deterministic:
+    property input_deterministic:
         def __get__(self):
             return (self.fst.Properties(cfst.kIDeterministic, True) & cfst.kIDeterministic)
+
+    property output_deterministic:
+        def __get__(self):
+            return (self.fst.Properties(cfst.kODeterministic, True) & cfst.kODeterministic)
+
+    property acceptor:
+        def __get__(self):
+            return (self.fst.Properties(cfst.kAcceptor, True) & cfst.kAcceptor)
 
     def determinize(self):
         """fst.determinize() -> determinized transducer"""
@@ -365,7 +379,8 @@ cdef class {{fst}}(Fst):
         return result
 
     def compose(self, {{fst}} other):
-        """fst.compose({{fst}} other) == fst >> other -> composed transducer"""
+        """fst.compose({{fst}} other) -> composed transducer
+        Shortcut: fst >> other"""
         cdef {{fst}} result = {{fst}}(isyms=self.isyms, osyms=other.osyms)
         cfst.Compose(self.fst[0], other.fst[0], result.fst)
         return result
@@ -374,7 +389,11 @@ cdef class {{fst}}(Fst):
         return x.compose(y)
 
     def intersect(self, {{fst}} other):
-        """fst.intersect({{fst}} other) == fst & other -> intersection of the two transducers"""
+        """fst.intersect({{fst}} other) -> intersection of the two acceptors
+        Shortcut: fst & other"""
+        if not (self.acceptor and other.acceptor):
+            return ValueError('both transducers need to be acceptors')
+        # TODO manage symbol tables
         cdef {{fst}} result = {{fst}}(isyms=self.isyms, osyms=self.osyms)
         cfst.Intersect(self.fst[0], other.fst[0], result.fst)
         return result
@@ -384,10 +403,12 @@ cdef class {{fst}}(Fst):
 
     def set_union(self, {{fst}} other):
         """fst.set_union({{fst}} other): modify to the union of the two transducers"""
+        # TODO manage symbol tables
         cfst.Union(self.fst, other.fst[0])
 
     def union(self, {{fst}} other):
-        """fst.union({{fst}} other) == fst | other -> union of the two transducers"""
+        """fst.union({{fst}} other) -> union of the two transducers
+        Shortcut: fst | other"""
         cdef {{fst}} result = self.copy()
         result.set_union(other)
         return result
@@ -397,10 +418,12 @@ cdef class {{fst}}(Fst):
 
     def concatenate(self, {{fst}} other):
         """fst.concatenate({{fst}} other): modify to the concatenation of the two transducers"""
+        # TODO manage symbol tables
         cfst.Concat(self.fst, other.fst[0])
 
     def concatenation(self, {{fst}} other):
-        """fst.concatenation({{fst}} other) == fst + other -> concatenation of the two transducers"""
+        """fst.concatenation({{fst}} other) -> concatenation of the two transducers
+        Shortcut: fst + other"""
         cdef {{fst}} result = self.copy()
         result.concatenate(other)
         return result
@@ -409,7 +432,9 @@ cdef class {{fst}}(Fst):
         return x.concatenation(y)
 
     def difference(self, {{fst}} other):
-        """fst.difference({{fst}} other) == fst - other -> difference of the two transducers"""
+        """fst.difference({{fst}} other) -> difference of the two transducers
+        Shortcut: fst - other"""
+        # TODO manage symbol tables
         cdef {{fst}} result = {{fst}}(isyms=self.isyms, osyms=self.osyms)
         cfst.Difference(self.fst[0], other.fst[0], result.fst)
         return result
@@ -462,8 +487,8 @@ cdef class {{fst}}(Fst):
 
     def minimize(self):
         """fst.minimize(): minimize the transducer"""
-        if not self.deterministic:
-            raise ValueError('transducer is not deterministic')
+        if not self.input_deterministic:
+            raise ValueError('transducer is not input deterministic')
         cfst.Minimize(self.fst)
 
     def arc_sort_input(self):
@@ -485,23 +510,35 @@ cdef class {{fst}}(Fst):
     def project_input(self):
         """fst.project_input(): project the transducer on the input side"""
         cfst.Project(self.fst, cfst.PROJECT_INPUT)
+        self.osyms = self.isyms
 
     def project_output(self):
         """fst.project_output(): project the transducer on the output side"""
         cfst.Project(self.fst, cfst.PROJECT_OUTPUT)
+        self.isyms = self.osyms
 
     def remove_epsilon(self):
         """fst.remove_epsilon(): remove the epsilon transitions from the transducer"""
         cfst.RmEpsilon(self.fst)
 
-    def relabel(self, ipairs=[], opairs=[]):
-        """fst.relabel(ipairs=[], opairs=[]): relabel the symbols on the arcs of the transducer"""
+    def _tosym(self, label, io):
+        if isinstance(label, int):
+            return label
+        elif isinstance(label, basestring):
+            if io and self.isyms is not None:
+                return self.isyms[label]
+            elif not io and self.osyms is not None:
+                return self.osyms[label]
+        raise TypeError('Cannot convert type {0} to symbol'.format(type(label)))
+
+    def relabel(self, imap={}, omap={}):
+        """fst.relabel(imap={}, omap={}): relabel the symbols on the arcs of the transducer"""
         cdef vector[pair[int, int]]* ip = new vector[pair[int, int]]()
         cdef vector[pair[int, int]]* op = new vector[pair[int, int]]()
-        for old, new in ipairs:
-            ip.push_back(pair[int, int](old, new))
-        for old, new in opairs:
-            op.push_back(pair[int, int](old, new))
+        for old, new in imap.iteritems():
+            ip.push_back(pair[int, int](self._tosym(old, True), self._tosym(new, True)))
+        for old, new in omap.iteritems():
+            op.push_back(pair[int, int](self._tosym(old, False), self._tosym(new, False)))
         cfst.Relabel(self.fst, ip[0], op[0])
         del ip, op
 
@@ -512,6 +549,8 @@ cdef class {{fst}}(Fst):
         cfst.Prune(self.fst, (<{{weight}}> threshold).weight[0])
 
     def plus_map(self, value):
+        """fst.plus_map(value) -> transducer with weights equal to the original weights
+        plus the given value"""
         cdef {{fst}} result = {{fst}}(isyms=self.isyms, osyms=self.osyms)
         if not isinstance(value, {{weight}}):
             value = {{weight}}(value)
@@ -520,6 +559,8 @@ cdef class {{fst}}(Fst):
         return result
 
     def times_map(self, value):
+        """fst.times_map(value) -> transducer with weights equal to the original weights
+        times the given value"""
         cdef {{fst}} result = {{fst}}(isyms=self.isyms, osyms=self.osyms)
         if not isinstance(value, {{weight}}):
             value = {{weight}}(value)
@@ -528,6 +569,7 @@ cdef class {{fst}}(Fst):
         return result
 
     def remove_weights(self):
+        """fst.times_map(value) -> transducer with weights removed"""
         cdef {{fst}} result = {{fst}}(isyms=self.isyms, osyms=self.osyms)
         cfst.ArcMap(self.fst[0], result.fst, cfst.Rm{{weight}}Mapper())
         return result
@@ -557,26 +599,31 @@ cdef class {{fst}}(Fst):
 {{/types}}
 
 cdef class SimpleFst(StdVectorFst):
-    """SimpleFst() -> transducer with input/output symbol tables"""
-    def __init__(self):
+    def __init__(self, isyms=None, osyms=None):
+        """SimpleFst(isyms=None, osyms=None) -> transducer with input/output symbol tables"""
         StdVectorFst.__init__(self)
         self.start = self.add_state()
-        self.isyms = SymbolTable()
-        self.osyms = SymbolTable()
+        self.isyms = (isyms if isyms is not None else SymbolTable())
+        self.osyms = (osyms if osyms is not None else SymbolTable())
 
     def add_arc(self, src, tgt, ilabel, olabel, weight=None):
         """fst.add_arc(int source, int dest, ilabel, olabel, weight=None):
         add an arc source->dest labeled with labels ilabel:olabel and weighted with weight"""
-        while max(src, tgt) > len(self)-1:
+        while src > len(self) - 1:
             self.add_state()
         StdVectorFst.add_arc(self, src, tgt, self.isyms[ilabel], self.osyms[olabel], weight)
 
+    def __getitem__(self, stateid):
+        while stateid > len(self) - 1:
+            self.add_state()
+        return StdVectorFst.__getitem__(self, stateid)
+
 cdef class Acceptor(SimpleFst):
-    """Acceptor() -> acceptor transducer with a symbol table"""
-    def __init__(self):
+    def __init__(self, syms=None):
+        """Acceptor(syms=None) -> acceptor transducer with an input/output symbol table"""
         StdVectorFst.__init__(self)
         self.start = self.add_state()
-        self.isyms = self.osyms = SymbolTable()
+        self.isyms = self.osyms = (syms if syms is not None else SymbolTable())
 
     def add_arc(self, src, tgt, label, weight=None):
         """fst.add_arc(int source, int dest, label, weight=None):
