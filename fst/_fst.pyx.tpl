@@ -150,7 +150,7 @@ cdef class {{weight}}:
         return int(self.weight.Value())
 
     def __bool__(self):
-        return (self.weight[0] != libfst.{{weight}}Zero())
+        return not (self.weight[0] == libfst.{{weight}}Zero())
 
     def __repr__(self):
         return '{{weight}}({0})'.format(float(self))
@@ -560,7 +560,7 @@ cdef class {{fst}}(Fst):
         libfst.Prune(self.fst, (<{{weight}}> threshold).weight[0])
 
     def connect(self):
-         """fst.connect(): removes states and arcs that are not on successful paths."""
+        """fst.connect(): removes states and arcs that are not on successful paths."""
         libfst.Connect(self.fst)
 
     def plus_map(self, value):
@@ -599,10 +599,9 @@ cdef class {{fst}}(Fst):
         """fst._visit(stateid, prefix): depth-first search"""
         if self[stateid].final:
             yield prefix
-        else:
-            for arc in self[stateid]:
-                for path in visit(arc.nextstate, prefix+(arc)):
-                    yield path
+        for arc in self[stateid]:
+            for path in self._visit(arc.nextstate, prefix+(arc,)):
+                yield path
 
     def paths(self):
         """fst.paths() -> iterator over all the paths in the transducer"""

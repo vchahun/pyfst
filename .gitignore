@@ -1,0 +1,3 @@
+fst/_fst.pyx
+fst/libfst.pxd
+fst/_fst.cpp
