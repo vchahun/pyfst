@@ -5,7 +5,7 @@ Python interface to [OpenFst](http://openfst.org)
 ## Installation
 
 1. Install the latest version of OpenFst (1.3.2)
-2. `pip install -e git+https://github.com/vchahun/pyfst.git#egg=pyfst`
+2. `pip install http://github.com/downloads/vchahun/pyfst/pyfst-1.0dev.tar.gz`
 
 ## Usage
 
