@@ -23,10 +23,10 @@ def read(filename):
     Detect arc type (has to be LogArc or TropicalArc) and produce specific transducer."""
     filename = as_str(filename)
     cdef ifstream* stream = new ifstream(filename)
-    cdef libfst.FstHeader* header = new libfst.FstHeader()
+    cdef libfst.FstHeader header
     header.Read(stream[0], filename)
     cdef bytes arc_type = header.ArcType()
-    del stream, header
+    del stream
     if arc_type == 'standard':
         return read_std(filename)
     elif arc_type == 'log':
@@ -52,9 +52,8 @@ def read_symbols(filename):
     filename = as_str(filename)
     cdef ifstream* fstream = new ifstream(filename)
     cdef SymbolTable table = SymbolTable.__new__(SymbolTable)
-    cdef sym.SymbolTable* syms = sym.SymbolTableRead(fstream[0], filename)
-    table.table = new sym.SymbolTable(syms[0])
-    del syms, fstream
+    table.table = sym.SymbolTableRead(fstream[0], filename)
+    del fstream
     return table
 
 cdef class SymbolTable:
@@ -96,9 +95,12 @@ cdef class SymbolTable:
     def items(self):
         """table.items() -> iterator over (symbol, value) pairs"""
         cdef sym.SymbolTableIterator* it = new sym.SymbolTableIterator(self.table[0])
-        while not it.Done():
-            yield (it.Symbol(), it.Value())
-            it.Next()
+        try:
+            while not it.Done():
+                yield (it.Symbol(), it.Value())
+                it.Next()
+        finally:
+            del it
 
     def __richcmp__(SymbolTable x, SymbolTable y, int op):
         if op == 2: # ==
@@ -282,7 +284,7 @@ cdef class {{fst}}(Fst):
             self.osyms = (self.isyms if (isyms is osyms) else osyms.copy())
 
     def __dealloc__(self):
-        del self.fst
+        del self.fst, self.isyms, self.osyms
 
     def _init_tables(self):
         if self.fst.MutableInputSymbols() != NULL:
@@ -293,6 +295,9 @@ cdef class {{fst}}(Fst):
             self.osyms = SymbolTable.__new__(SymbolTable)
             self.osyms.table = new sym.SymbolTable(self.fst.MutableOutputSymbols()[0])
             self.fst.SetOutputSymbols(NULL)
+        # reduce memory usage if isyms == osyms
+        if self.isyms == self.osyms:
+            self.osyms = self.isyms
 
     def __len__(self):
         return self.fst.NumStates()
@@ -344,7 +349,8 @@ cdef class {{fst}}(Fst):
             raise ValueError('invalid source state id ({0} > {1})'.format(source, self.fst.NumStates()-1))
         if not isinstance(weight, {{weight}}):
             weight = {{weight}}(weight)
-        cdef libfst.{{arc}}* arc = new libfst.{{arc}}(ilabel, olabel, (<{{weight}}> weight).weight[0], dest)
+        cdef libfst.{{arc}}* arc
+        arc = new libfst.{{arc}}(ilabel, olabel, (<{{weight}}> weight).weight[0], dest)
         self.fst.AddArc(source, arc[0])
         del arc
 
@@ -354,7 +360,7 @@ cdef class {{fst}}(Fst):
 
     def __richcmp__({{fst}} x, {{fst}} y, int op):
         if op == 2: # ==
-            return libfst.Equivalent(x.fst[0], y.fst[0])
+            return libfst.Equivalent(x.fst[0], y.fst[0]) # FIXME check deterministic eps-free
         elif op == 3: # !=
             return not (x == y)
         raise NotImplemented('comparison not implemented for {{fst}}')
@@ -481,13 +487,10 @@ cdef class {{fst}}(Fst):
 
     def shortest_distance(self, bint reverse=False):
         """fst.shortest_distance(bool reverse=False) -> length of the shortest path"""
-        cdef vector[libfst.{{weight}}]* distances = new vector[libfst.{{weight}}]()
-        libfst.ShortestDistance(self.fst[0], distances, reverse)
-        cdef list dist = []
+        cdef vector[libfst.{{weight}}] distances
+        libfst.ShortestDistance(self.fst[0], &distances, reverse)
         cdef unsigned i
-        for i in range(distances.size()):
-            dist.append({{weight}}(distances[0][i].Value()))
-        del distances
+        dist = [{{weight}}(distances[i].Value()) for i in range(distances.size())]
         return dist
 
     def shortest_path(self, unsigned n=1):
@@ -504,15 +507,13 @@ cdef class {{fst}}(Fst):
 
     def arc_sort_input(self):
         """fst.arc_sort_input(): sort the input arcs of the transducer"""
-        cdef libfst.ILabelCompare[libfst.{{arc}}]* icomp = new libfst.ILabelCompare[libfst.{{arc}}]()
-        libfst.ArcSort(self.fst, icomp[0])
-        del icomp
+        cdef libfst.ILabelCompare[libfst.{{arc}}] icomp
+        libfst.ArcSort(self.fst, icomp)
 
     def arc_sort_output(self):
         """fst.arc_sort_output(): sort the output arcs of the transducer"""
-        cdef libfst.OLabelCompare[libfst.{{arc}}]* ocomp = new libfst.OLabelCompare[libfst.{{arc}}]()
-        libfst.ArcSort(self.fst, ocomp[0])
-        del ocomp
+        cdef libfst.OLabelCompare[libfst.{{arc}}] ocomp
+        libfst.ArcSort(self.fst, ocomp)
 
     def top_sort(self):
         """fst.top_sort(): topologically sort the nodes of the transducer"""
@@ -544,14 +545,13 @@ cdef class {{fst}}(Fst):
 
     def relabel(self, imap={}, omap={}):
         """fst.relabel(imap={}, omap={}): relabel the symbols on the arcs of the transducer"""
-        cdef vector[pair[int, int]]* ip = new vector[pair[int, int]]()
-        cdef vector[pair[int, int]]* op = new vector[pair[int, int]]()
-        for old, new in imap.iteritems():
+        cdef vector[pair[int, int]] ip
+        cdef vector[pair[int, int]] op
+        for old, new in imap.items():
             ip.push_back(pair[int, int](self._tosym(old, True), self._tosym(new, True)))
-        for old, new in omap.iteritems():
+        for old, new in omap.items():
             op.push_back(pair[int, int](self._tosym(old, False), self._tosym(new, False)))
-        libfst.Relabel(self.fst, ip[0], op[0])
-        del ip, op
+        libfst.Relabel(self.fst, ip, op)
 
     def prune(self, threshold):
         """fst.prune(threshold): prune the transducer"""
@@ -595,6 +595,22 @@ cdef class {{fst}}(Fst):
         libfst.ArcMap(self.fst[0], result.fst, libfst.Invert{{weight}}Mapper())
         return result
 
+    def replace(self, label_fst_map, epsilon=False):
+        """fst.replace(label_fst_map, epsilon=False) -> transducer with non-terminals replaced
+        label_fst_map: non-terminals (str) -> fst map
+        epsilon: replace input label by epsilon?"""
+        assert self.osyms # used to encode labels
+        cdef {{fst}} result = {{fst}}(isyms=self.isyms, osyms=self.osyms)
+        cdef vector[pair[int, libfst.Const{{fst}}Ptr]] label_fst_pairs
+        cdef {{fst}} fst
+        label_fst_map['__ROOT__'] = self
+        for label, fst in label_fst_map.items():
+            assert (not fst.osyms or fst.osyms == self.osyms) # output symbols must match
+            label_id = self.osyms[label]
+            label_fst_pairs.push_back(pair[int, libfst.Const{{fst}}Ptr](label_id, fst.fst))
+        libfst.Replace(label_fst_pairs, result.fst, self.osyms['__ROOT__'], epsilon)
+        return result
+
     def _visit(self, int stateid, prefix=()):
         """fst._visit(stateid, prefix): depth-first search"""
         if self[stateid].final:
@@ -612,7 +628,7 @@ cdef class {{fst}}(Fst):
             SymbolTable ssyms=None):
         """fst.draw(SymbolTable isyms=None, SymbolTable osyms=None, SymbolTable ssyms=None)
         -> dot format representation of the transducer"""
-        cdef ostringstream* out = new ostringstream()
+        cdef ostringstream out
         cdef sym.SymbolTable* isyms_table = (isyms.table if isyms 
                                              else self.isyms.table if self.isyms
                                              else NULL)
@@ -620,13 +636,13 @@ cdef class {{fst}}(Fst):
                                              else self.osyms.table if self.osyms
                                              else NULL)
         cdef sym.SymbolTable* ssyms_table = (ssyms.table if ssyms else NULL)
-        cdef libfst.FstDrawer[libfst.{{arc}}]* drawer =\
-            new libfst.FstDrawer[libfst.{{arc}}](self.fst[0],
+        cdef libfst.FstDrawer[libfst.{{arc}}]* drawer
+        drawer = new libfst.FstDrawer[libfst.{{arc}}](self.fst[0],
                 isyms_table, osyms_table, ssyms_table,
                 False, string(), 8.5, 11, True, False, 0.40, 0.25, 14, 5, False)
-        drawer.Draw(out, 'fst')
+        drawer.Draw(&out, 'fst')
         cdef bytes out_str = out.str()
-        del drawer, out
+        del drawer
         return out_str
 
 {{/types}}

@@ -116,7 +116,7 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
 
     cdef bint Equivalent(Fst& fst1, Fst& fst2)
 
-    # const
+    # Constructive operations
     cdef void Compose(Fst &ifst1, Fst &ifst2, MutableFst* ofst)
     cdef void Determinize(Fst& ifst, MutableFst* ofst)
     cdef void Difference(Fst &ifst1, Fst &ifst2, MutableFst* ofst)
@@ -127,7 +127,7 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
 {{#types}}
     cdef void ShortestDistance(Fst &fst, vector[{{weight}}]* distance, bint reverse)
 {{/types}}
-    # non const
+    # Destructive operations
     cdef void Closure(MutableFst* ifst, ClosureType type)
     cdef void Invert(MutableFst* ifst)
     cdef void Minimize(MutableFst* fst)
@@ -143,9 +143,17 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
     cdef void Prune(MutableFst* ifst, {{weight}} threshold)
     cdef void Connect(MutableFst *fst)
 {{/types}}
-    # other
+    # Other
     cdef void Union(MutableFst* ifst1, Fst &ifst2)
     cdef void Concat(MutableFst* ifst1, Fst &ifst2)
+
+{{#types}}
+    ctypedef Fst* Const{{fst}}Ptr 'const fst::Fst<fst::{{arc}}>*'
+    cdef void Replace(vector[pair[int, Const{{fst}}Ptr]] label_fst_pairs, 
+             MutableFst *ofst,
+             int root,
+             bint epsilon_on_replace)
+{{/types}}
 
 cdef extern from "<fst/script/draw.h>" namespace "fst":
     cdef cppclass FstDrawer[A]:
