@@ -138,7 +138,8 @@ cdef class {{weight}}:
 
     def __init__(self, value):
         """{{weight}}(value) -> {{semiring}} weight initialized with the given value"""
-        self.weight = new libfst.{{weight}}((libfst.{{weight}}One() if value is True or value is None
+        self.weight = new libfst.{{weight}}((libfst.{{weight}}One()
+                        if (value is True or value is None)
                         else libfst.{{weight}}Zero() if value is False
                         else libfst.{{weight}}(float(value))))
 
@@ -164,6 +165,9 @@ cdef class {{weight}}:
             return not (x == y)
         raise NotImplemented('comparison not implemented for {{weight}}')
 
+    def approx_equal(self, {{weight}} other):
+        return libfst.ApproxEqual(self.weight[0], other.weight[0])
+
     def __add__({{weight}} x, {{weight}} y):
         cdef {{weight}} result = {{weight}}.__new__({{weight}})
         result.weight = new libfst.{{weight}}(libfst.Plus(x.weight[0], y.weight[0]))
@@ -174,17 +178,10 @@ cdef class {{weight}}:
         result.weight = new libfst.{{weight}}(libfst.Times(x.weight[0], y.weight[0]))
         return result
 
-    def __iadd__(self, {{weight}} other):
-        cdef libfst.{{weight}}* result = new libfst.{{weight}}(libfst.Plus(self.weight[0], other.weight[0]))
-        del self.weight
-        self.weight = result
-        return self
-
-    def __imul__(self, {{weight}} other):
-        cdef libfst.{{weight}}* result = new libfst.{{weight}}(libfst.Times(self.weight[0], other.weight[0]))
-        del self.weight
-        self.weight = result
-        return self
+    def __div__({{weight}} x, {{weight}} y):
+        cdef {{weight}} result = {{weight}}.__new__({{weight}})
+        result.weight = new libfst.{{weight}}(libfst.Divide(x.weight[0], y.weight[0]))
+        return result
 
 cdef class {{arc}}:
     cdef libfst.{{arc}}* arc
@@ -198,19 +195,31 @@ cdef class {{arc}}:
         def __get__(self):
             return self.arc.ilabel
 
+        def __set__(self, int ilabel):
+            self.arc.ilabel = ilabel
+
     property olabel:
         def __get__(self):
             return self.arc.olabel
 
+        def __set__(self, int olabel):
+            self.arc.olabel = olabel
+
     property nextstate:
         def __get__(self):
             return self.arc.nextstate
+
+        def __set__(self, int nextstate):
+            self.arc.nextstate = nextstate
 
     property weight:
         def __get__(self):
             cdef {{weight}} weight = {{weight}}.__new__({{weight}})
             weight.weight = new libfst.{{weight}}(self.arc.weight)
             return weight
+
+        def __set__(self, {{weight}} weight):
+            self.arc.weight = weight.weight[0]
 
 cdef class {{state}}:
     cdef public int stateid
@@ -278,6 +287,8 @@ cdef class {{fst}}(Fst):
             if isinstance(source, {{other}}VectorFst):
                 libfst.ArcMap((<{{other}}VectorFst> source).fst[0], self.fst,
                     libfst.{{convert}}WeightConvertMapper())
+                isyms, osyms = source.isyms, source.osyms
+        # Copy symbol tables (of source or given)
         if isyms is not None:
             self.isyms = isyms.copy()
         if osyms is not None:
@@ -495,9 +506,31 @@ cdef class {{fst}}(Fst):
 
     def shortest_path(self, unsigned n=1):
         """fst.shortest_path(int n=1) -> transducer containing the n shortest paths"""
+        if not isinstance(self, StdVectorFst):
+            raise TypeError('Weight needs to have the path property and be right distributive')
         cdef {{fst}} result = {{fst}}(isyms=self.isyms, osyms=self.osyms)
         libfst.ShortestPath(self.fst[0], result.fst, n)
         return result
+
+    def push(self, final=False, weights=False, labels=False):
+        """fst.push(final=False, weights=False, labels=False) -> transducer with weights or/and labels pushed to initial (default) or final state"""
+        cdef {{fst}} result = {{fst}}(isyms=self.isyms, osyms=self.osyms)
+        cdef int ptype = 0
+        if weights: ptype |= libfst.kPushWeights
+        if labels: ptype |= libfst.kPushLabels
+        if final:
+            libfst.{{arc}}PushFinal(self.fst[0], result.fst, ptype)
+        else:
+            libfst.{{arc}}PushInitial(self.fst[0], result.fst, ptype)
+        return result
+
+    def push_weights(self, final=False):
+        """fst.push_weights(final=False) -> transducer with weights pushed to initial (default) or final state"""
+        return self.push(final, weights=True)
+
+    def push_labels(self, final=False):
+        """fst.push_labels(final=False) -> transducer with labels pushed to initial (default) or final state"""
+        return self.push(final, labels=True)
 
     def minimize(self):
         """fst.minimize(): minimize the transducer"""

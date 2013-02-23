@@ -2,17 +2,6 @@
 import sys
 import fst
 
-def make_input(word, syms):
-    """
-    Make a character input transducer:
-    [0] =w:w=> 1 =o:o=> 2 =r:r=> 3 =d:d=> (4) 
-    """
-    inp = fst.Acceptor(syms)
-    for i, c in enumerate(word):
-        inp.add_arc(i, i+1, c)
-    inp[i+1].final = True
-    return inp
-
 def make_edit(sigma):
     """
     Make an edit distance transducer with operations:
@@ -35,7 +24,7 @@ def make_edit(sigma):
     # Define edit distance
     def distance(a, b):
         # Compose a o edit transducer o b
-        composed = make_input(a, syms) >> edit >> make_input(b, syms)
+        composed = fst.linear_chain(a, syms) >> edit >> fst.linear_chain(b, syms)
         # Compute distance
         distances = composed.shortest_distance(reverse=True)
         dist = int(distances[0])

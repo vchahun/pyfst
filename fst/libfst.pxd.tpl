@@ -1,7 +1,7 @@
 from libcpp.vector cimport vector
 from libcpp.string cimport string
 from libcpp.pair cimport pair
-from libc.stdint cimport uint64_t
+from libc.stdint cimport uint64_t, uint32_t
 from util cimport ostream, istream
 
 cimport sym
@@ -64,9 +64,12 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
 
     cdef {{weight}} Plus({{weight}} &w1, {{weight}}& w2)
     cdef {{weight}} Times({{weight}} &w1, {{weight}}& w2)
+    cdef {{weight}} Divide({{weight}} &w1, {{weight}}& w2)
 
     cdef {{weight}} {{weight}}Zero "fst::{{weight}}::Zero" ()
     cdef {{weight}} {{weight}}One "fst::{{weight}}::One" ()
+
+    cdef bint ApproxEqual({{weight}} &w1, {{weight}} &w2)
 
     ctypedef Arc[{{weight}}] {{arc}}
 
@@ -114,6 +117,10 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
         CLOSURE_STAR
         CLOSURE_PLUS
 
+    enum:
+        kPushWeights
+        kPushLabels
+
     cdef bint Equivalent(Fst& fst1, Fst& fst2)
 
     # Constructive operations
@@ -126,6 +133,8 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
     cdef void ArcMap (Fst &ifst, MutableFst* ofst, ArcMapper mapper)
 {{#types}}
     cdef void ShortestDistance(Fst &fst, vector[{{weight}}]* distance, bint reverse)
+    cdef void {{arc}}PushInitial "fst::Push<fst::{{arc}}, fst::REWEIGHT_TO_INITIAL>" (Fst &ifst, MutableFst* ofst, uint32_t ptype)
+    cdef void {{arc}}PushFinal "fst::Push<fst::{{arc}}, fst::REWEIGHT_TO_FINAL>" (Fst &ifst, MutableFst* ofst, uint32_t ptype)
 {{/types}}
     # Destructive operations
     cdef void Closure(MutableFst* ifst, ClosureType type)

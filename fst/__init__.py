@@ -35,3 +35,11 @@ class Acceptor(SimpleFst):
         """fst.add_arc(int source, int dest, label, weight=None):
         add an arc source->dest labeled with label and weighted with weight"""
         SimpleFst.add_arc(self, src, tgt, label, label, weight)
+
+def linear_chain(text, syms=None):
+    """linear_chain(text, syms=None) -> linear chain acceptor for the given input text"""
+    chain = Acceptor(syms)
+    for i, c in enumerate(text):
+        chain.add_arc(i, i+1, c)
+    chain[i+1].final = True
+    return chain
