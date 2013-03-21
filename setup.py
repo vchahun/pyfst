@@ -1,11 +1,22 @@
+import sys
+import os
 from distutils.core import setup
 from distutils.extension import Extension
+
+INC, LIB = [], []
+
+# MacPorts
+if sys.platform == 'darwin' and os.path.isdir('/opt/local/lib'):
+    INC.append('/opt/local/include')
+    LIB.append('/opt/local/lib')
 
 ext_modules = [
     Extension(name='fst._fst',
         sources=['fst/_fst.cpp'],
         libraries=['z', 'fst'],
-        extra_compile_args=['-O2'])
+        extra_compile_args=['-O2'],
+        include_dirs=INC,
+        library_dirs=LIB)
 ]
 
 long_description = """
@@ -14,7 +25,7 @@ pyfst
 
 A Cython wrapper of the OpenFst_ library.
 
-Requires OpenFst 1.3.2
+Requires OpenFst 1.3
 
 .. _OpenFst: http://www.openfst.org
 
