@@ -106,8 +106,11 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
         Rm{{weight}}Mapper()
     cdef cppclass {{convert}}WeightConvertMapper "fst::WeightConvertMapper<fst::{{other}}Arc, fst::{{arc}}>"(ArcMapper):
         {{convert}}WeightConvertMapper()
+    cdef cppclass {{arc}}Selector:
+        {{arc}}Selector()
+    cdef cppclass {{arc}}RandGenOptions "fst::RandGenOptions<fst::{{arc}}Selector>":
+        {{arc}}RandGenOptions({{arc}}Selector& selector)
 {{/types}}
-        
 
     enum ProjectType:
         PROJECT_INPUT
@@ -135,6 +138,7 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
     cdef void ShortestDistance(Fst &fst, vector[{{weight}}]* distance, bint reverse)
     cdef void {{arc}}PushInitial "fst::Push<fst::{{arc}}, fst::REWEIGHT_TO_INITIAL>" (Fst &ifst, MutableFst* ofst, uint32_t ptype)
     cdef void {{arc}}PushFinal "fst::Push<fst::{{arc}}, fst::REWEIGHT_TO_FINAL>" (Fst &ifst, MutableFst* ofst, uint32_t ptype)
+    cdef void RandGen(Fst &ifst, MutableFst* ofst, const {{arc}}RandGenOptions& opts)
 {{/types}}
     # Destructive operations
     cdef void Closure(MutableFst* ifst, ClosureType type)

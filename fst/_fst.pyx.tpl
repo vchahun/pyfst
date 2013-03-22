@@ -16,7 +16,7 @@ cdef bytes as_str(data):
         return data
     elif isinstance(data, unicode):
         return data.encode('utf8')
-    raise TypeError('Cannot convert %s to string' % type(data))
+    raise TypeError('Cannot convert {} to bytestring'.format(type(data)))
 
 def read(filename):
     """read(filename) -> transducer read from the binary file
@@ -27,11 +27,11 @@ def read(filename):
     header.Read(stream[0], filename)
     cdef bytes arc_type = header.ArcType()
     del stream
-    if arc_type == 'standard':
+    if arc_type == b'standard':
         return read_std(filename)
-    elif arc_type == 'log':
+    elif arc_type == b'log':
         return read_log(filename)
-    raise TypeError('cannot read transducer with arcs of type {0}'.format(arc_type))
+    raise TypeError('cannot read transducer with arcs of type {}'.format(arc_type))
 
 def read_std(filename):
     """read_std(filename) -> StdVectorFst read from the binary file"""
@@ -62,7 +62,7 @@ cdef class SymbolTable:
     def __init__(self, epsilon=EPSILON):
         """SymbolTable() -> new symbol table with \u03b5 <-> 0
         SymbolTable(epsilon) -> new symbol table with epsilon <-> 0"""
-        cdef bytes name = 'SymbolTable<{0}>'.format(id(self))
+        cdef bytes name = 'SymbolTable<{}>'.format(id(self)).encode('ascii')
         self.table = new sym.SymbolTable(<string> name)
         assert (self[epsilon] == EPSILON_ID)
 
@@ -87,7 +87,7 @@ cdef class SymbolTable:
 
     def find(self, long key):
         """table.find(int key) -> decoded symbol"""
-        return self.table.Find(key)
+        return self.table.Find(key).decode('utf8')
 
     def __len__(self):
         return self.table.NumSymbols()
@@ -110,9 +110,9 @@ cdef class SymbolTable:
         raise NotImplemented('comparison not implemented for SymbolTable')
 
     def __repr__(self):
-        return '<SymbolTable of size %d>' % len(self)
+        return '<SymbolTable of size {}>'.format(len(self))
 
-cdef class Fst:
+cdef class _Fst:
     def __init__(self):
         raise NotImplemented('use StdVectorFst or LogVectorFst to create a transducer')
 
@@ -155,9 +155,6 @@ cdef class {{weight}}:
     def __bool__(self):
         return not (self.weight[0] == libfst.{{weight}}Zero())
 
-    def __repr__(self):
-        return '{{weight}}({0})'.format(float(self))
-
     def __richcmp__({{weight}} x, {{weight}} y, int op):
         if op == 2: # ==
             return x.weight[0] == y.weight[0]
@@ -182,6 +179,9 @@ cdef class {{weight}}:
         cdef {{weight}} result = {{weight}}.__new__({{weight}})
         result.weight = new libfst.{{weight}}(libfst.Divide(x.weight[0], y.weight[0]))
         return result
+
+    def __repr__(self):
+        return '{{weight}}({})'.format(float(self))
 
 cdef class {{arc}}:
     cdef libfst.{{arc}}* arc
@@ -220,6 +220,10 @@ cdef class {{arc}}:
 
         def __set__(self, {{weight}} weight):
             self.arc.weight = weight.weight[0]
+
+    def __repr__(self):
+        return '<{{arc}} -> {} | {}:{}/{}>'.format(self.nextstate,
+            self.ilabel, self.olabel, self.weight)
 
 cdef class {{state}}:
     cdef public int stateid
@@ -272,7 +276,10 @@ cdef class {{state}}:
             elif self.stateid == self.fst.Start():
                 self.fst.SetStart(-1)
 
-cdef class {{fst}}(Fst):
+    def __repr__(self):
+        return '<{{state}} #{} with {} arcs>'.format(self.stateid, len(self))
+
+cdef class {{fst}}(_Fst):
     cdef libfst.{{fst}}* fst
     cdef public SymbolTable isyms, osyms
     SEMIRING = {{weight}}
@@ -318,7 +325,7 @@ cdef class {{fst}}(Fst):
         return sum(len(state) for state in self)
 
     def __repr__(self):
-        return '<{{fst}} with %d states>' % len(self)
+        return '<{{fst}} with {} states>'.format(len(self))
 
     def copy(self):
         """fst.copy() -> a copy of the transducer"""
@@ -357,7 +364,7 @@ cdef class {{fst}}(Fst):
         """fst.add_arc(int source, int dest, int ilabel, int olabel, weight=None)
         add an arc source->dest labeled with labels ilabel:olabel and weighted with weight"""
         if source > self.fst.NumStates()-1:
-            raise ValueError('invalid source state id ({0} > {1})'.format(source, self.fst.NumStates()-1))
+            raise ValueError('invalid source state id ({} > {})'.format(source, self.fst.NumStates()-1))
         if not isinstance(weight, {{weight}}):
             weight = {{weight}}(weight)
         cdef libfst.{{arc}}* arc
@@ -567,17 +574,19 @@ cdef class {{fst}}(Fst):
         libfst.RmEpsilon(self.fst)
 
     def _tosym(self, label, io):
+        # If integer label, return integer
         if isinstance(label, int):
             return label
-        elif isinstance(label, basestring):
-            if io and self.isyms is not None:
-                return self.isyms[label]
-            elif not io and self.osyms is not None:
-                return self.osyms[label]
-        raise TypeError('Cannot convert type {0} to symbol'.format(type(label)))
+        # Otherwise, try to convert using symbol tables
+        if io and self.isyms is not None:
+            return self.isyms[label]
+        elif not io and self.osyms is not None:
+            return self.osyms[label]
+        raise TypeError('Cannot convert label "{}" to symbol'.format(label))
 
     def relabel(self, imap={}, omap={}):
-        """fst.relabel(imap={}, omap={}): relabel the symbols on the arcs of the transducer"""
+        """fst.relabel(imap={}, omap={}): relabel the symbols on the arcs of the transducer
+        imap/omap: (int -> int) or (str -> str) symbol mappings"""
         cdef vector[pair[int, int]] ip
         cdef vector[pair[int, int]] op
         for old, new in imap.items():
@@ -642,6 +651,17 @@ cdef class {{fst}}(Fst):
             label_id = self.osyms[label]
             label_fst_pairs.push_back(pair[int, libfst.Const{{fst}}Ptr](label_id, fst.fst))
         libfst.Replace(label_fst_pairs, result.fst, self.osyms['__ROOT__'], epsilon)
+        return result
+
+    # TODO uniform sampling, multiple paths
+    def random_generate(self):
+        """fst.random_generate() -> random path sampled according to weights
+        assumes the weights to encode log probabilities"""
+        cdef {{fst}} result = {{fst}}(isyms=self.isyms, osyms=self.osyms)
+        cdef libfst.{{arc}}Selector selector = libfst.{{arc}}Selector()
+        cdef libfst.{{arc}}RandGenOptions* options = new libfst.{{arc}}RandGenOptions(selector)
+        libfst.RandGen(self.fst[0], result.fst, options[0])
+        del options
         return result
 
     def _visit(self, int stateid, prefix=()):

@@ -10,8 +10,8 @@ def test_shortest_distance():
     t.add_arc(2, 3, 'f', 4)
     t[3].final = 3
 
-    eq_(map(float, t.shortest_distance()), [0, 3, 5, 7])
-    eq_(map(float, t.shortest_distance(True)), [10, 7, 7, 3])
+    eq_([float(v) for v in t.shortest_distance()], [0, 3, 5, 7])
+    eq_([float(v) for v in t.shortest_distance(True)], [10, 7, 7, 3])
 
 def test_replace():
     syms = fst.SymbolTable()
