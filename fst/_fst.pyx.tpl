@@ -20,7 +20,7 @@ cdef bytes as_str(data):
 
 def read(filename):
     """read(filename) -> transducer read from the binary file
-    Detect arc type (has to be LogArc or TropicalArc) and produce specific transducer."""
+    Detect arc type (LogArc or TropicalArc) and produce specific transducer."""
     filename = as_str(filename)
     cdef ifstream* stream = new ifstream(filename)
     cdef libfst.FstHeader header
@@ -95,9 +95,11 @@ cdef class SymbolTable:
     def items(self):
         """table.items() -> iterator over (symbol, value) pairs"""
         cdef sym.SymbolTableIterator* it = new sym.SymbolTableIterator(self.table[0])
+        cdef bytes symbol
         try:
             while not it.Done():
-                yield (it.Symbol(), it.Value())
+                symbol = it.Symbol()
+                yield (symbol.decode('utf8'), it.Value())
                 it.Next()
         finally:
             del it
@@ -119,8 +121,8 @@ cdef class _Fst:
     def _repr_svg_(self):
         """IPython magic: show SVG reprensentation of the transducer"""
         try:
-            process = subprocess.Popen(['dot', '-Tsvg'], 
-                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            process = subprocess.Popen(['dot', '-Tsvg'], stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         except OSError:
             raise Exception('cannot find the dot binary')
         out, err = process.communicate(self.draw())
@@ -333,7 +335,8 @@ cdef class {{fst}}(_Fst):
         if self.isyms is not None:
             result.isyms = self.isyms.copy()
         if self.osyms is not None:
-            result.osyms = (result.isyms if (self.isyms is self.osyms) else self.osyms.copy())
+            result.osyms = (result.isyms if (self.isyms is self.osyms)
+                else self.osyms.copy())
         result.fst = <libfst.{{fst}}*> self.fst.Copy()
         return result
 
@@ -364,7 +367,8 @@ cdef class {{fst}}(_Fst):
         """fst.add_arc(int source, int dest, int ilabel, int olabel, weight=None)
         add an arc source->dest labeled with labels ilabel:olabel and weighted with weight"""
         if source > self.fst.NumStates()-1:
-            raise ValueError('invalid source state id ({} > {})'.format(source, self.fst.NumStates()-1))
+            raise ValueError('invalid source state id ({} > {})'.format(source,
+                self.fst.NumStates()-1))
         if not isinstance(weight, {{weight}}):
             weight = {{weight}}(weight)
         cdef libfst.{{arc}}* arc
@@ -397,15 +401,18 @@ cdef class {{fst}}(_Fst):
 
     property input_deterministic:
         def __get__(self):
-            return (self.fst.Properties(libfst.kIDeterministic, True) & libfst.kIDeterministic)
+            return bool(self.fst.Properties(libfst.kIDeterministic, True) &
+                libfst.kIDeterministic)
 
     property output_deterministic:
         def __get__(self):
-            return (self.fst.Properties(libfst.kODeterministic, True) & libfst.kODeterministic)
+            return bool(self.fst.Properties(libfst.kODeterministic, True) &
+                libfst.kODeterministic)
 
     property acceptor:
         def __get__(self):
-            return (self.fst.Properties(libfst.kAcceptor, True) & libfst.kAcceptor)
+            return bool(self.fst.Properties(libfst.kAcceptor, True) &
+                libfst.kAcceptor)
 
     def determinize(self):
         """fst.determinize() -> determinized transducer"""
@@ -427,8 +434,12 @@ cdef class {{fst}}(_Fst):
         """fst.intersect({{fst}} other) -> intersection of the two acceptors
         Shortcut: fst & other"""
         if not (self.acceptor and other.acceptor):
-            return ValueError('both transducers need to be acceptors')
-        # TODO manage symbol tables
+            raise ValueError('both transducers need to be acceptors')
+        # TODO merge symbol tables (intersection)
+        if self.isyms and (self.isyms != other.isyms):
+            raise ValueError('transducers must use shared input symbol table')
+        if self.osyms and (self.osyms != other.osyms):
+            raise ValueError('transducers must use shared output symbol table')
         cdef {{fst}} result = {{fst}}(isyms=self.isyms, osyms=self.osyms)
         libfst.Intersect(self.fst[0], other.fst[0], result.fst)
         return result
@@ -438,7 +449,11 @@ cdef class {{fst}}(_Fst):
 
     def set_union(self, {{fst}} other):
         """fst.set_union({{fst}} other): modify to the union of the two transducers"""
-        # TODO manage symbol tables
+        # TODO merge symbol tables (union)
+        if self.isyms and (self.isyms != other.isyms):
+            raise ValueError('transducers must use shared input symbol table')
+        if self.osyms and (self.osyms != other.osyms):
+            raise ValueError('transducers must use shared output symbol table')
         libfst.Union(self.fst, other.fst[0])
 
     def union(self, {{fst}} other):
@@ -452,8 +467,13 @@ cdef class {{fst}}(_Fst):
         return x.union(y)
 
     def concatenate(self, {{fst}} other):
-        """fst.concatenate({{fst}} other): modify to the concatenation of the two transducers"""
-        # TODO manage symbol tables
+        """fst.concatenate({{fst}} other): modify to the concatenation
+        of the two transducers"""
+        # TODO merge symbol tables (union)
+        if self.isyms and (self.isyms != other.isyms):
+            raise ValueError('transducers must use shared input symbol table')
+        if self.osyms and (self.osyms != other.osyms):
+            raise ValueError('transducers must use shared output symbol table')
         libfst.Concat(self.fst, other.fst[0])
 
     def concatenation(self, {{fst}} other):
@@ -469,7 +489,11 @@ cdef class {{fst}}(_Fst):
     def difference(self, {{fst}} other):
         """fst.difference({{fst}} other) -> difference of the two transducers
         Shortcut: fst - other"""
-        # TODO manage symbol tables
+        # TODO merge symbol tables (union)
+        if self.isyms and (self.isyms != other.isyms):
+            raise ValueError('transducers must use shared input symbol table')
+        if self.osyms and (self.osyms != other.osyms):
+            raise ValueError('transducers must use shared output symbol table')
         cdef {{fst}} result = {{fst}}(isyms=self.isyms, osyms=self.osyms)
         libfst.Difference(self.fst[0], other.fst[0], result.fst)
         return result
@@ -520,7 +544,8 @@ cdef class {{fst}}(_Fst):
         return result
 
     def push(self, final=False, weights=False, labels=False):
-        """fst.push(final=False, weights=False, labels=False) -> transducer with weights or/and labels pushed to initial (default) or final state"""
+        """fst.push(final=False, weights=False, labels=False) -> transducer with
+        weights or/and labels pushed to initial (default) or final state"""
         cdef {{fst}} result = {{fst}}(isyms=self.isyms, osyms=self.osyms)
         cdef int ptype = 0
         if weights: ptype |= libfst.kPushWeights
@@ -532,11 +557,13 @@ cdef class {{fst}}(_Fst):
         return result
 
     def push_weights(self, final=False):
-        """fst.push_weights(final=False) -> transducer with weights pushed to initial (default) or final state"""
+        """fst.push_weights(final=False) -> transducer with weights pushed
+        to initial (default) or final state"""
         return self.push(final, weights=True)
 
     def push_labels(self, final=False):
-        """fst.push_labels(final=False) -> transducer with labels pushed to initial (default) or final state"""
+        """fst.push_labels(final=False) -> transducer with labels pushed
+        to initial (default) or final state"""
         return self.push(final, labels=True)
 
     def minimize(self):
