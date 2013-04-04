@@ -47,7 +47,7 @@ Example usage::
 
 setup(
     name='pyfst',
-    version='0.1.1',
+    version='0.1.3',
     url='http://github.com/vchahun/pyfst',
     author='Victor Chahuneau',
     description='Cython wrapper of the OpenFst library.',

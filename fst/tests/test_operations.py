@@ -60,6 +60,33 @@ def test_replace():
 
     eq_(result, expected)
 
+# TODO generate several paths and check number of paths generated
+# TODO check distributions?
+def test_randgen():
+    t = fst.Acceptor()
+    t.add_arc(0, 1, 'a', 0.5)
+    t.add_arc(1, 2, 'b', 0.5)
+    t.add_arc(0, 2, 'ab', 1.0)
+    t.add_arc(2, 3, 'c')
+    t.add_arc(3, 4, 'd')
+    t.add_arc(2, 4, 'cd')
+    t[4].final = True
+    r = t.uniform_generate()
+    # check that r \in t
+    eq_(r & t.remove_weights(), r)
+    r = t.logprob_generate()
+    # check that r \in t
+    eq_(r & t.remove_weights(), r)
+
+def test_closure():
+    t = fst.linear_chain('ab')
+    result = t.closure_plus()
+    eq_(len(result), len(t))
+    result.remove_epsilon()
+    expected = t + t.closure()
+    expected.remove_epsilon()
+    eq_(result, expected)
+
 if __name__ == '__main__':
     test_shortest_distance()
     test_replace()

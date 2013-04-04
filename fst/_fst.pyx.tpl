@@ -1,11 +1,13 @@
 cimport libfst
 cimport sym
 import subprocess
+import random
 
 from libcpp.vector cimport vector
 from libcpp.string cimport string
 from libcpp.pair cimport pair
 from libc.stdint cimport uint64_t
+from libc.limits cimport INT_MAX
 from util cimport ifstream, ostringstream
 
 EPSILON_ID = 0
@@ -135,15 +137,17 @@ cdef class _Fst:
 cdef class {{weight}}:
     cdef libfst.{{weight}}* weight
 
-    ZERO = {{weight}}(libfst.{{weight}}Zero().Value())
-    ONE = {{weight}}(libfst.{{weight}}One().Value())
+    ZERO = {{weight}}(False)
+    ONE = {{weight}}(True)
 
     def __init__(self, value):
         """{{weight}}(value) -> {{semiring}} weight initialized with the given value"""
-        self.weight = new libfst.{{weight}}((libfst.{{weight}}One()
-                        if (value is True or value is None)
-                        else libfst.{{weight}}Zero() if value is False
-                        else libfst.{{weight}}(float(value))))
+        if value is True or value is None:
+            self.weight = new libfst.{{weight}}(libfst.{{weight}}One())
+        elif value is False:
+            self.weight = new libfst.{{weight}}(libfst.{{weight}}Zero())
+        else:
+            self.weight = new libfst.{{weight}}(float(value))
 
     def __dealloc__(self):
         del self.weight
@@ -501,14 +505,21 @@ cdef class {{fst}}(_Fst):
     def __sub__({{fst}} x, {{fst}} y):
         return x.difference(y)
 
-    def set_closure(self):
+    def set_closure(self, plus=False):
         """fst.set_closure(): modify to the Kleene closure of the transducer"""
-        libfst.Closure(self.fst, libfst.CLOSURE_STAR)
+        libfst.Closure(self.fst, (libfst.CLOSURE_PLUS if plus
+            else libfst.CLOSURE_STAR))
 
     def closure(self):
         """fst.closure() -> Kleene closure of the transducer"""
         cdef {{fst}} result = self.copy()
         result.set_closure()
+        return result
+
+    def closure_plus(self):
+        """fst.closure_plus() -> Kleen plus closure (X+ = XX*) of the transducer"""
+        cdef {{fst}} result = self.copy()
+        result.set_closure(plus=True)
         return result
 
     def invert(self):
@@ -565,6 +576,20 @@ cdef class {{fst}}(_Fst):
         """fst.push_labels(final=False) -> transducer with labels pushed
         to initial (default) or final state"""
         return self.push(final, labels=True)
+
+    def reweight(self, potentials, final=False):
+        """fst.reweight(potentials, final=False): reweight arcs with given
+        potentials in direction of initial (default) or final state"""
+        if not len(potentials) == len(self):
+            raise ValueError('potential list of invalid length')
+        cdef rtype = (libfst.REWEIGHT_TO_FINAL if final else
+                libfst.REWEIGHT_TO_INITIAL)
+        cdef vector[libfst.{{weight}}] potentials_vector = vector[libfst.{{weight}}]()
+        for weight in potentials:
+            if not isinstance(weight, {{weight}}):
+                weight = {{weight}}(weight)
+            potentials_vector.push_back((<{{weight}}> weight).weight[0])
+        libfst.{{arc}}Reweight(self.fst, potentials_vector, rtype)
 
     def minimize(self):
         """fst.minimize(): minimize the transducer"""
@@ -653,7 +678,7 @@ cdef class {{fst}}(_Fst):
         return result
 
     def remove_weights(self):
-        """fst.times_map(value) -> transducer with weights removed"""
+        """fst.remove_weights() -> transducer with weights removed"""
         cdef {{fst}} result = {{fst}}(isyms=self.isyms, osyms=self.osyms)
         libfst.ArcMap(self.fst[0], result.fst, libfst.Rm{{weight}}Mapper())
         return result
@@ -680,15 +705,33 @@ cdef class {{fst}}(_Fst):
         libfst.Replace(label_fst_pairs, result.fst, self.osyms['__ROOT__'], epsilon)
         return result
 
-    # TODO uniform sampling, multiple paths
-    def random_generate(self):
-        """fst.random_generate() -> random path sampled according to weights
-        assumes the weights to encode log probabilities"""
+    def random_generate(self, n_path=1, max_len=None, uniform=True, weighted=False):
+        if uniform:
+            return self.uniform_generate(n_path, max_len, weighted)
+        else:
+            return self.logprob_generate(n_path, max_len, weighted)
+
+    def logprob_generate(self, n_path=1, max_len=None, weighted=False):
+        """fst.logprob_generate(n_path=1) -> n_path random paths
+        sampled according to weights assumed to encode log probabilities"""
         cdef {{fst}} result = {{fst}}(isyms=self.isyms, osyms=self.osyms)
-        cdef libfst.{{arc}}Selector selector = libfst.{{arc}}Selector()
-        cdef libfst.{{arc}}RandGenOptions* options = new libfst.{{arc}}RandGenOptions(selector)
+        cdef int seed = random.randint(0, INT_MAX)
+        cdef libfst.LogProb{{arc}}Selector* selector = new libfst.LogProb{{arc}}Selector(seed)
+        cdef int maxlen = (INT_MAX if max_len is None else max_len)
+        cdef libfst.LogProb{{arc}}RandGenOptions* options = new libfst.LogProb{{arc}}RandGenOptions(selector[0], maxlen, n_path, weighted)
         libfst.RandGen(self.fst[0], result.fst, options[0])
-        del options
+        del options, selector
+        return result
+
+    def uniform_generate(self, n_path=1, max_len=None, weighted=False):
+        """fst.uniform_generate(n_path=1) -> n_path random paths sampled uniformly"""
+        cdef {{fst}} result = {{fst}}(isyms=self.isyms, osyms=self.osyms)
+        cdef int seed = random.randint(0, INT_MAX)
+        cdef libfst.Uniform{{arc}}Selector* selector = new libfst.Uniform{{arc}}Selector(seed)
+        cdef int maxlen = (INT_MAX if max_len is None else max_len)
+        cdef libfst.Uniform{{arc}}RandGenOptions* options = new libfst.Uniform{{arc}}RandGenOptions(selector[0], maxlen, n_path, weighted)
+        libfst.RandGen(self.fst[0], result.fst, options[0])
+        del options, selector
         return result
 
     def _visit(self, int stateid, prefix=()):

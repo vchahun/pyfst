@@ -106,10 +106,16 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
         Rm{{weight}}Mapper()
     cdef cppclass {{convert}}WeightConvertMapper "fst::WeightConvertMapper<fst::{{other}}Arc, fst::{{arc}}>"(ArcMapper):
         {{convert}}WeightConvertMapper()
-    cdef cppclass {{arc}}Selector:
-        {{arc}}Selector()
-    cdef cppclass {{arc}}RandGenOptions "fst::RandGenOptions<fst::{{arc}}Selector>":
-        {{arc}}RandGenOptions({{arc}}Selector& selector)
+    cdef cppclass LogProb{{arc}}Selector "fst::LogProbArcSelector<fst::{{arc}}>":
+        LogProb{{arc}}Selector(int seed)
+    cdef cppclass Uniform{{arc}}Selector "fst::UniformArcSelector<fst::{{arc}}>":
+        Uniform{{arc}}Selector(int seed)
+    cdef cppclass RandGenOptions:
+        pass
+    cdef cppclass LogProb{{arc}}RandGenOptions "fst::RandGenOptions< fst::LogProbArcSelector<fst::{{arc}}> >"(RandGenOptions):
+        LogProb{{arc}}RandGenOptions(LogProb{{arc}}Selector& selector, int maxlen, int npath, bint weighted)
+    cdef cppclass Uniform{{arc}}RandGenOptions "fst::RandGenOptions< fst::UniformArcSelector<fst::{{arc}}> >"(RandGenOptions):
+        Uniform{{arc}}RandGenOptions(Uniform{{arc}}Selector& selector, int maxlen, int npath, bint weighted)
 {{/types}}
 
     enum ProjectType:
@@ -119,6 +125,10 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
     enum ClosureType:
         CLOSURE_STAR
         CLOSURE_PLUS
+
+    enum ReweightType:
+        REWEIGHT_TO_INITIAL
+        REWEIGHT_TO_FINAL
 
     enum:
         kPushWeights
@@ -136,9 +146,11 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
     cdef void ArcMap (Fst &ifst, MutableFst* ofst, ArcMapper mapper)
 {{#types}}
     cdef void ShortestDistance(Fst &fst, vector[{{weight}}]* distance, bint reverse)
-    cdef void {{arc}}PushInitial "fst::Push<fst::{{arc}}, fst::REWEIGHT_TO_INITIAL>" (Fst &ifst, MutableFst* ofst, uint32_t ptype)
-    cdef void {{arc}}PushFinal "fst::Push<fst::{{arc}}, fst::REWEIGHT_TO_FINAL>" (Fst &ifst, MutableFst* ofst, uint32_t ptype)
-    cdef void RandGen(Fst &ifst, MutableFst* ofst, const {{arc}}RandGenOptions& opts)
+    cdef void {{arc}}PushInitial "fst::Push<fst::{{arc}}, fst::REWEIGHT_TO_INITIAL>" (Fst &ifst,
+        MutableFst* ofst, uint32_t ptype)
+    cdef void {{arc}}PushFinal "fst::Push<fst::{{arc}}, fst::REWEIGHT_TO_FINAL>" (Fst &ifst,
+        MutableFst* ofst, uint32_t ptype)
+    cdef void RandGen(Fst &ifst, MutableFst* ofst, const RandGenOptions& opts)
 {{/types}}
     # Destructive operations
     cdef void Closure(MutableFst* ifst, ClosureType type)
@@ -155,6 +167,8 @@ cdef extern from "<fst/fstlib.h>" namespace "fst":
     cdef void ArcSort(MutableFst* fst, OLabelCompare[{{arc}}]& compare)
     cdef void Prune(MutableFst* ifst, {{weight}} threshold)
     cdef void Connect(MutableFst *fst)
+    cdef void {{arc}}Reweight "fst::Reweight<fst::{{arc}}>" (MutableFst* fst,
+        vector[{{weight}}] potentials, ReweightType rtype)
 {{/types}}
     # Other
     cdef void Union(MutableFst* ifst1, Fst &ifst2)
