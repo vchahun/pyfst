@@ -13,7 +13,7 @@ def make_edit(sigma):
     syms = fst.SymbolTable()
 
     # Create transducer
-    edit = fst.SimpleFst(syms, syms)
+    edit = fst.Transducer(syms, syms)
     edit[0].final = True
     for x in sigma:
         edit.add_arc(0, 0, x, fst.EPSILON, 1)

@@ -12,9 +12,9 @@ Python interface to [OpenFst](http://openfst.org)
 The [basic example](http://www.openfst.org/twiki/bin/view/FST/FstQuickTour#CreatingFsts) from the documentation translates to:
 
 ```python
-from fst import StdVectorFst
+import fst
 
-t = StdVectorFst()
+t = fst.StdVectorFst()
 
 t.start = t.add_state()
 
@@ -32,9 +32,9 @@ t.write('binary.fst')
 
 A simplified FST class is available:
 ```python
-from fst import SimpleFst
+import fst
 
-t = SimpleFst()
+t = fst.Transducer()
 
 t.add_arc(0, 1, 'a', 'A', 0.5)
 t.add_arc(0, 1, 'b', 'B', 1.5)

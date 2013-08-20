@@ -23,7 +23,7 @@ long_description = """
 pyfst
 =====
 
-A Cython wrapper of the OpenFst_ library.
+A Python interface for the OpenFst_ library.
 
 Requires OpenFst 1.3
 
@@ -31,9 +31,9 @@ Requires OpenFst 1.3
 
 Example usage::
 
-    from fst import SimpleFst
+    import fst
 
-    t = SimpleFst()
+    t = fst.Transducer()
 
     t.add_arc(0, 1, 'a', 'A', 0.5)
     t.add_arc(0, 1, 'b', 'B', 1.5)
@@ -47,10 +47,10 @@ Example usage::
 
 setup(
     name='pyfst',
-    version='0.1.3',
+    version='0.2.1',
     url='http://github.com/vchahun/pyfst',
     author='Victor Chahuneau',
-    description='Cython wrapper of the OpenFst library.',
+    description='A Python interface to Openfst.',
     long_description=long_description,
     classifiers=['Topic :: Text Processing :: Linguistic'],
     packages=['fst'],
