@@ -2,6 +2,7 @@ cimport libfst
 cimport sym
 import subprocess
 import random
+import re
 
 from libcpp.vector cimport vector
 from libcpp.string cimport string
@@ -225,6 +226,7 @@ cdef class {{arc}}:
             return weight
 
         def __set__(self, {{weight}} weight):
+            # TODO create function as_weight(anything) -> Weight
             self.arc.weight = weight.weight[0]
 
     def __repr__(self):
@@ -427,6 +429,8 @@ cdef class {{fst}}(_Fst):
     def compose(self, {{fst}} other):
         """fst.compose({{fst}} other) -> composed transducer
         Shortcut: fst >> other"""
+        if (self.osyms or other.isyms) and (self.osyms != other.isyms):
+            raise ValueError('transducer symbol tables are not compatible for composition')
         cdef {{fst}} result = {{fst}}(isyms=self.isyms, osyms=other.osyms)
         libfst.Compose(self.fst[0], other.fst[0], result.fst)
         return result
@@ -766,6 +770,9 @@ cdef class {{fst}}(_Fst):
         drawer.Draw(&out, 'fst')
         cdef bytes out_str = out.str()
         del drawer
+        if self.acceptor:
+            # Replace double labels (a:a) with simple labels (a)
+            out_str = re.sub(r'label = "(.+):\1(["\/])', r'label = "\1\2', out_str)
         return out_str
 
 {{/types}}

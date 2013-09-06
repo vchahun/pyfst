@@ -13,7 +13,7 @@ if sys.platform == 'darwin' and os.path.isdir('/opt/local/lib'):
 ext_modules = [
     Extension(name='fst._fst',
         sources=['fst/_fst.cpp'],
-        libraries=['z', 'fst'],
+        libraries=['fst'],
         extra_compile_args=['-O2'],
         include_dirs=INC,
         library_dirs=LIB)
@@ -48,7 +48,7 @@ Example usage::
 
 setup(
     name='pyfst',
-    version='0.2.1',
+    version='0.2.2',
     url='http://pyfst.github.io',
     author='Victor Chahuneau',
     description='A Python interface to OpenFst.',
