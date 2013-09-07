@@ -19,7 +19,7 @@ cdef bytes as_str(data):
         return data
     elif isinstance(data, unicode):
         return data.encode('utf8')
-    raise TypeError('Cannot convert {} to bytestring'.format(type(data)))
+    raise TypeError('Cannot convert {0} to bytestring'.format(type(data)))
 
 def read(filename):
     """read(filename) -> transducer read from the binary file
@@ -34,7 +34,7 @@ def read(filename):
         return read_std(filename)
     elif arc_type == b'log':
         return read_log(filename)
-    raise TypeError('cannot read transducer with arcs of type {}'.format(arc_type))
+    raise TypeError('cannot read transducer with arcs of type {0}'.format(arc_type))
 
 def read_std(filename):
     """read_std(filename) -> StdVectorFst read from the binary file"""
@@ -65,7 +65,7 @@ cdef class SymbolTable:
     def __init__(self, epsilon=EPSILON):
         """SymbolTable() -> new symbol table with \u03b5 <-> 0
         SymbolTable(epsilon) -> new symbol table with epsilon <-> 0"""
-        cdef bytes name = 'SymbolTable<{}>'.format(id(self)).encode('ascii')
+        cdef bytes name = 'SymbolTable<{0}>'.format(id(self)).encode('ascii')
         self.table = new sym.SymbolTable(<string> name)
         assert (self[epsilon] == EPSILON_ID)
 
@@ -88,9 +88,24 @@ cdef class SymbolTable:
         """table.write(filename): save the symbol table to filename"""
         self.table.Write(as_str(filename))
 
-    def find(self, long key):
-        """table.find(int key) -> decoded symbol"""
-        return self.table.Find(key).decode('utf8')
+    def find(self, key):
+        """table.find(int value) -> decoded symbol if any symbol maps to this value
+        table.find(str symbol) -> encoded value if this symbol is in the table"""
+        if isinstance(key, (int, long)):
+            result = self.table.Find(<long> key).decode('utf8')
+            if result == u'':
+                raise KeyError(key)
+            return result
+        else:
+            key = as_str(key)
+            result = self.table.Find(<char*>key)
+            if result == -1:
+                raise KeyError(key)
+            return result
+
+    def __contains__(self, key):
+        key = as_str(key)
+        return (self.table.Find(<char*>key) != -1)
 
     def __len__(self):
         return self.table.NumSymbols()
@@ -98,24 +113,52 @@ cdef class SymbolTable:
     def items(self):
         """table.items() -> iterator over (symbol, value) pairs"""
         cdef sym.SymbolTableIterator* it = new sym.SymbolTableIterator(self.table[0])
-        cdef bytes symbol
         try:
             while not it.Done():
-                symbol = it.Symbol()
-                yield (symbol.decode('utf8'), it.Value())
+                yield (it.Symbol().decode('utf8'), it.Value())
                 it.Next()
         finally:
             del it
 
     def __richcmp__(SymbolTable x, SymbolTable y, int op):
         if op == 2: # ==
-            return x.table.CheckSum() == y.table.CheckSum()
+            return x.table.LabeledCheckSum() == y.table.LabeledCheckSum()
         elif op == 3: # !=
             return not (x == y)
         raise NotImplemented('comparison not implemented for SymbolTable')
 
     def __repr__(self):
-        return '<SymbolTable of size {}>'.format(len(self))
+        return '<SymbolTable of size {0}>'.format(len(self))
+
+    def merge(self, other):
+        """table.merge(other): if the two tables are compatible,
+        extend this table with the symbol, value pairs of the other table"""
+        if other is None or other == self:
+            return
+        _merge_tables(self, other, self)
+        _merge_tables(other, self, self)
+
+
+def _merge_tables(SymbolTable syms1, SymbolTable syms2, SymbolTable merged):
+    """
+    Merge tables `syms1` and `syms2` into `merged` if they are compatible.
+    Tables are compatible if all common symbol/values map identically.
+    """
+    for symbol, value in syms1.items():
+        try:
+            other_symbol = syms2.find(value)
+            if other_symbol != symbol:
+                raise ValueError('incompatible symbol tables')
+        except KeyError:
+            pass
+        try:
+            other_value = syms2.find(symbol)
+            if other_value != value:
+                raise ValueError('incompatible symbol tables')
+        except KeyError:
+            pass
+        merged[symbol] = value
+    
 
 cdef class _Fst:
     def __init__(self):
@@ -188,7 +231,7 @@ cdef class {{weight}}:
         return result
 
     def __repr__(self):
-        return '{{weight}}({})'.format(float(self))
+        return '{{weight}}({0})'.format(float(self))
 
 cdef class {{arc}}:
     cdef libfst.{{arc}}* arc
@@ -230,7 +273,7 @@ cdef class {{arc}}:
             self.arc.weight = weight.weight[0]
 
     def __repr__(self):
-        return '<{{arc}} -> {} | {}:{}/{}>'.format(self.nextstate,
+        return '<{{arc}} -> {0} | {1}:{2}/{3}>'.format(self.nextstate,
             self.ilabel, self.olabel, self.weight)
 
 cdef class {{state}}:
@@ -285,7 +328,7 @@ cdef class {{state}}:
                 self.fst.SetStart(-1)
 
     def __repr__(self):
-        return '<{{state}} #{} with {} arcs>'.format(self.stateid, len(self))
+        return '<{{state}} #{0} with {1} arcs>'.format(self.stateid, len(self))
 
 cdef class {{fst}}(_Fst):
     cdef libfst.{{fst}}* fst
@@ -333,7 +376,7 @@ cdef class {{fst}}(_Fst):
         return sum(len(state) for state in self)
 
     def __repr__(self):
-        return '<{{fst}} with {} states>'.format(len(self))
+        return '<{{fst}} with {0} states>'.format(len(self))
 
     def copy(self):
         """fst.copy() -> a copy of the transducer"""
@@ -373,7 +416,7 @@ cdef class {{fst}}(_Fst):
         """fst.add_arc(int source, int dest, int ilabel, int olabel, weight=None)
         add an arc source->dest labeled with labels ilabel:olabel and weighted with weight"""
         if source > self.fst.NumStates()-1:
-            raise ValueError('invalid source state id ({} > {})'.format(source,
+            raise ValueError('invalid source state id ({0} > {1})'.format(source,
                 self.fst.NumStates()-1))
         if not isinstance(weight, {{weight}}):
             weight = {{weight}}(weight)
@@ -442,8 +485,8 @@ cdef class {{fst}}(_Fst):
         """fst.intersect({{fst}} other) -> intersection of the two acceptors
         Shortcut: fst & other"""
         if not (self.acceptor and other.acceptor):
-            raise ValueError('both transducers need to be acceptors')
-        # TODO merge symbol tables (intersection)
+            raise ValueError('both transducers need to be acceptors for intersection')
+        # TODO check and merge symbol tables (intersection)
         if self.isyms and (self.isyms != other.isyms):
             raise ValueError('transducers must use shared input symbol table')
         if self.osyms and (self.osyms != other.osyms):
@@ -457,11 +500,10 @@ cdef class {{fst}}(_Fst):
 
     def set_union(self, {{fst}} other):
         """fst.set_union({{fst}} other): modify to the union of the two transducers"""
-        # TODO merge symbol tables (union)
-        if self.isyms and (self.isyms != other.isyms):
-            raise ValueError('transducers must use shared input symbol table')
-        if self.osyms and (self.osyms != other.osyms):
-            raise ValueError('transducers must use shared output symbol table')
+        if self.isyms:
+            self.isyms.merge(other.isyms)
+        if self.osyms:
+            self.osyms.merge(other.osyms)
         libfst.Union(self.fst, other.fst[0])
 
     def union(self, {{fst}} other):
@@ -477,11 +519,10 @@ cdef class {{fst}}(_Fst):
     def concatenate(self, {{fst}} other):
         """fst.concatenate({{fst}} other): modify to the concatenation
         of the two transducers"""
-        # TODO merge symbol tables (union)
-        if self.isyms and (self.isyms != other.isyms):
-            raise ValueError('transducers must use shared input symbol table')
-        if self.osyms and (self.osyms != other.osyms):
-            raise ValueError('transducers must use shared output symbol table')
+        if self.isyms:
+            self.isyms.merge(other.isyms)
+        if self.osyms:
+            self.osyms.merge(other.osyms)
         libfst.Concat(self.fst, other.fst[0])
 
     def concatenation(self, {{fst}} other):
@@ -527,8 +568,10 @@ cdef class {{fst}}(_Fst):
         return result
 
     def invert(self):
-        """fst.invert(): modify to the inverse of the transducer"""
+        """fst.invert(): modify to the inverse of the transducer
+        switch input and output labels"""
         libfst.Invert(self.fst)
+        self.isyms, self.osyms = self.osyms, self.isyms
     
     def inverse(self):
         """fst.inverse() -> inverse of the transducer"""
@@ -538,7 +581,7 @@ cdef class {{fst}}(_Fst):
 
     def reverse(self):
         """fst.reverse() -> reversed transducer"""
-        cdef {{fst}} result = {{fst}}(isyms=self.osyms, osyms=self.isyms)
+        cdef {{fst}} result = {{fst}}(isyms=self.isyms, osyms=self.osyms)
         libfst.Reverse(self.fst[0], result.fst)
         return result
 
@@ -638,7 +681,7 @@ cdef class {{fst}}(_Fst):
             return self.isyms[label]
         elif not io and self.osyms is not None:
             return self.osyms[label]
-        raise TypeError('Cannot convert label "{}" to symbol'.format(label))
+        raise TypeError('Cannot convert label "{0}" to symbol'.format(label))
 
     def relabel(self, imap={}, omap={}):
         """fst.relabel(imap={}, omap={}): relabel the symbols on the arcs of the transducer

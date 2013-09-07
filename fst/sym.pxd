@@ -11,9 +11,9 @@ cdef extern from "<fst/symbol-table.h>" namespace "fst":
         bint Write(string &filename)
         #WriteText (ostream &strm)
         string Find(long key)
-        string Find(char* symbol)
+        long Find(const char* symbol)
         unsigned NumSymbols()
-        string CheckSum()
+        string LabeledCheckSum()
 
     cdef cppclass SymbolTableIterator:
         SymbolTableIterator(SymbolTable& table)

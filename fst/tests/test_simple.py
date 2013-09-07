@@ -16,5 +16,8 @@ def test_simple():
     eq_(len(a), 6)
     ok_(a[5].final)
 
+    l = fst.linear_chain('hello')
+    eq_(a, l)
+
 if __name__ == '__main__':
     test_simple()
